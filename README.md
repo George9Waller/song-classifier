@@ -113,6 +113,7 @@ song-classifier process [PATH] [OPTIONS]
     --no-sync               Skip git sync
     --dry-run               Show what would be done without making changes
     -V, --verbose           Enable verbose/debug output
+    -y, --yes               Automatically accept AI metadata without a confirmation UI (use with caution)
 
 song-classifier config show
   Show current configuration
