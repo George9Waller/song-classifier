@@ -74,7 +74,7 @@ async def classify_filename(
         return ai_metadata
 
     # UI confirm (blocking - Textual handles its own event loop)
-    confirmed = confirm_metadata(ai_metadata)
+    confirmed = await confirm_metadata(ai_metadata)
 
     # Upsert album and track CSV metadata
     logger.debug("  Saving to metadata CSV")

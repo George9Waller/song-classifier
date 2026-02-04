@@ -235,7 +235,7 @@ class ConfirmMetadataApp(App[TrackMetadata]):
             va_checkbox.display = False
 
 
-def confirm_metadata(initial: TrackMetadata) -> TrackMetadata:
+async def confirm_metadata(initial: TrackMetadata) -> TrackMetadata:
     """Display TUI for reviewing and confirming metadata.
 
     Args:
@@ -245,4 +245,5 @@ def confirm_metadata(initial: TrackMetadata) -> TrackMetadata:
         Confirmed/edited metadata from user.
     """
     app = ConfirmMetadataApp(initial)
-    return app.run()
+    result = await app.run_async()
+    return result
