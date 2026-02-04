@@ -831,6 +831,7 @@ dependencies = [
     { name = "filelock" },
     { name = "mutagen" },
     { name = "openai" },
+    { name = "rich" },
     { name = "textual" },
     { name = "webdavclient3" },
 ]
@@ -859,6 +860,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "rich", specifier = ">=13.0.0" },
     { name = "textual", specifier = ">=0.79.1" },
     { name = "webdavclient3", specifier = "==3.14.6" },
 ]
