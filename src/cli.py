@@ -16,7 +16,7 @@ from src.utils.config import (
 )
 from src.utils.file_transport import FileTransport, LocalTransport, WebdavTransport, TransportType
 from src.utils.git_sync import get_sync_repo, set_sync_repo, pull_metadata, push_metadata
-from src.utils.logging import setup_logging, get_logger
+from src.utils.logging import setup_logging
 from src.main import classify_filename
 
 __version__ = "0.1.0"
