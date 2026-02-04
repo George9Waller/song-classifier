@@ -1,13 +1,11 @@
 name: 🧪 Test
 
 on:
-  workflow_run:
-    workflows: [ "🔎 Lint" ]
-    types: [ completed ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   test:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
