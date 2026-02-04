@@ -139,7 +139,7 @@ Song Classifier can sync your metadata database with a git repository. This allo
 
 ```bash
 # One-time setup: configure your git repository
-song-classifier config set-sync-repo git@github.com:username/music-metadata.git
+song-classifier config set-sync-repo https://github.com/username/set-metadata.git
 ```
 
 The repository should be an empty or existing git repo. Song Classifier will:
