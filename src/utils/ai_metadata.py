@@ -1,20 +1,72 @@
+"""AI-powered metadata extraction using OpenAI."""
+
 import json
 import os
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 
-from models import AlbumMetadata, TrackMetadata
-from data import get_album_metadata
+from src.data import get_album_metadata
+from src.data.models import AlbumMetadata, TrackMetadata
+from src.utils.constants import DEFAULT_MODEL
+from src.utils.logging import get_logger
 
 
-def _ensure_openai_client() -> "OpenAI":
+class MissingAPIKeyError(ValueError):
+    """Raised when OPENAI_API_KEY is not set."""
+
+    pass
+
+
+def _ensure_openai_client(client: Optional[AsyncOpenAI] = None) -> AsyncOpenAI:
+    """Get or create an AsyncOpenAI client.
+
+    Args:
+        client: Optional existing client to use.
+
+    Returns:
+        AsyncOpenAI client instance.
+
+    Raises:
+        MissingAPIKeyError: If OPENAI_API_KEY is not set.
+    """
+    if client is not None:
+        return client
+
     api_key = os.environ.get("OPENAI_API_KEY")
-    return OpenAI(api_key=api_key)
+    if not api_key:
+        raise MissingAPIKeyError(
+            "OPENAI_API_KEY environment variable is required. "
+            "Set it with: export OPENAI_API_KEY=your_key"
+        )
+    return AsyncOpenAI(api_key=api_key)
+
+
+def validate_api_key() -> None:
+    """Validate that OPENAI_API_KEY is set.
+
+    Raises:
+        MissingAPIKeyError: If OPENAI_API_KEY is not set.
+    """
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise MissingAPIKeyError(
+            "OPENAI_API_KEY environment variable is required. "
+            "Set it with: export OPENAI_API_KEY=your_key"
+        )
 
 
 def _build_prompt(filename: str, existing: Optional[TrackMetadata]) -> str:
+    """Build the AI prompt for metadata extraction.
+
+    Args:
+        filename: The audio filename to analyze.
+        existing: Optional existing metadata from the file.
+
+    Returns:
+        Formatted prompt string.
+    """
     existing_json = None
     if existing:
         existing_json = json.dumps(
@@ -31,8 +83,9 @@ def _build_prompt(filename: str, existing: Optional[TrackMetadata]) -> str:
     )
 
     # Provide guidance for album selection and known albums for snapping.
+    albums = get_album_metadata()
     known_albums_list = [
-        {"name": a.name, "artist": a.artist} for a in get_album_metadata()
+        {"name": a.name, "artist": a.artist} for a in (albums if albums else [])
     ]
 
     return (
@@ -68,6 +121,14 @@ def _build_prompt(filename: str, existing: Optional[TrackMetadata]) -> str:
 
 
 def _extract_json(text: str) -> str:
+    """Extract JSON from model response, handling markdown code blocks.
+
+    Args:
+        text: Raw model response text.
+
+    Returns:
+        Extracted JSON string.
+    """
     fenced = re.sub(r"^```[a-zA-Z]*\n|\n```$", "", text.strip())
     if fenced.startswith("{") and fenced.endswith("}"):
         return fenced
@@ -77,13 +138,35 @@ def _extract_json(text: str) -> str:
     return text
 
 
-def parse_metadata_with_ai(filename: str, existing: Optional[TrackMetadata] = None) -> TrackMetadata:
-    client = _ensure_openai_client()
+async def parse_metadata_with_ai(
+    filename: str,
+    existing: Optional[TrackMetadata] = None,
+    client: Optional[AsyncOpenAI] = None,
+    model: str = DEFAULT_MODEL,
+) -> TrackMetadata:
+    """Parse metadata from filename using AI.
+
+    Args:
+        filename: The audio filename to analyze.
+        existing: Optional existing metadata from the file.
+        client: Optional AsyncOpenAI client for dependency injection.
+        model: OpenAI model to use.
+
+    Returns:
+        TrackMetadata inferred from the filename.
+
+    Raises:
+        MissingAPIKeyError: If OPENAI_API_KEY is not set.
+        RuntimeError: If the model returns invalid JSON.
+    """
+    logger = get_logger()
+    client = _ensure_openai_client(client)
 
     prompt = _build_prompt(filename, existing)
+    logger.debug(f"AI prompt: {prompt[:200]}...")
 
-    completion = client.chat.completions.create(
-        model="gpt-5-nano",
+    completion = await client.chat.completions.create(
+        model=model,
         messages=[
             {"role": "system", "content": "You are a helpful assistant that returns strict JSON only."},
             {"role": "user", "content": prompt},
@@ -93,9 +176,10 @@ def parse_metadata_with_ai(filename: str, existing: Optional[TrackMetadata] = No
 
     content = completion.choices[0].message.content or "{}"
     json_str = _extract_json(content)
+    logger.debug(f"AI response: {json_str[:200]}...")
 
     try:
-        data: Dict[str, Any] = json.loads(json_str)
+        data: dict[str, Any] = json.loads(json_str)
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"Failed to parse JSON from model: {exc}\nRaw: {content}")
 
@@ -110,7 +194,6 @@ def parse_metadata_with_ai(filename: str, existing: Optional[TrackMetadata] = No
     genre = data.get("genre") or ""
     date = data.get("date")
 
-    # No post-processing: rely on the model following the provided rules and known album list
     return TrackMetadata(
         key=filename,
         track=track,

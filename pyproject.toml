@@ -1,12 +1,42 @@
 [project]
 name = "song-classifier"
 version = "0.1.0"
-description = "A cli tool to tag music sets with metadata"
+description = "A CLI tool to auto-tag music files with AI-inferred metadata"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
     "mutagen>=1.47.0",
     "openai>=1.40.0",
     "textual>=0.79.1",
     "webdavclient3==3.14.6",
+    "filelock>=3.0.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-asyncio>=0.21.0",
+    "mypy>=1.0",
+]
+
+[project.scripts]
+song-classifier = "src.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
