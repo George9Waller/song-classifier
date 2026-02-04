@@ -29,6 +29,19 @@ cd song-classifier
 # Create virtual environment and install
 uv venv
 uv pip install -e .
+
+# Or install with dev dependencies
+uv pip install -e ".[dev]"
+```
+
+### Install CLI globally
+
+```bash
+# Install with pipx for global access
+pipx install git+https://github.com/yourusername/song-classifier.git
+
+# Or with uv
+uv tool install git+https://github.com/yourusername/song-classifier.git
 ```
 
 ### Set up OpenAI API key
@@ -38,6 +51,20 @@ export OPENAI_API_KEY=your_key_here
 ```
 
 Add this to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to persist across sessions.
+
+### Development setup
+
+```bash
+# Install in editable mode for development
+uv pip install -e ".[dev]"
+
+# Run via uv (recommended - automatically uses the venv)
+uv run song-classifier --help
+
+# Or activate the venv first, then run directly
+source .venv/bin/activate
+song-classifier --help
+```
 
 ### Linting
 This project uses ruff for linting.
@@ -59,32 +86,46 @@ uv run pytest
 
 ```bash
 # Process audio files in current directory
-song-classifier
+song-classifier process
 
 # Process audio files in a specific directory
-song-classifier ~/Music/sets
+song-classifier process ~/Music/sets
+
+# Preview changes without applying (dry-run)
+song-classifier process ~/Music/sets --dry-run
 
 # Process files from a WebDAV server
-song-classifier /remote/path --webdav http://user:pass@server/
+song-classifier process /remote/path --webdav http://server/ --webdav-user USER
 ```
 
-### Options
+### Commands
 
 ```
-song-classifier [PATH] [OPTIONS]
+song-classifier process [PATH] [OPTIONS]
+  Process audio files in a directory
 
-Arguments:
-  PATH                    Directory to scan (default: current directory)
+  Options:
+    --webdav HOST           WebDAV host URL
+    --webdav-user USER      WebDAV username (or WEBDAV_USERNAME env var)
+    --webdav-password PASS  WebDAV password (or WEBDAV_PASSWORD env var)
+    --no-skip-processed     Process files even if marked as processed
+    --no-skip-in-metadata   Process files even if already in metadata.csv
+    --no-sync               Skip git sync
+    --dry-run               Show what would be done without making changes
+    -V, --verbose           Enable verbose/debug output
 
-Options:
+song-classifier config show
+  Show current configuration
+
+song-classifier config set-sync-repo URL
+  Configure git repository for metadata sync
+
+song-classifier config set-webdav --user USER --password PASS
+  Configure WebDAV credentials
+
+Global options:
   -v, --version           Show version and exit
-  -h, --help              Show help message and exit
-  --webdav HOST           WebDAV host URL to use instead of local filesystem
-  --no-skip-processed     Process files even if marked as processed
-  --no-skip-in-metadata   Process files even if already in metadata.csv
-  --sync-repo URL         Configure git repository URL for syncing metadata
-  --no-sync               Skip git sync even if a repository is configured
-  --show-config           Show current configuration and exit
+  -h, --help              Show help message
 ```
 
 ### Git Sync
@@ -98,7 +139,7 @@ Song Classifier can sync your metadata database with a git repository. This allo
 
 ```bash
 # One-time setup: configure your git repository
-song-classifier --sync-repo git@github.com:username/music-metadata.git
+song-classifier config set-sync-repo git@github.com:username/music-metadata.git
 ```
 
 The repository should be an empty or existing git repo. Song Classifier will:
@@ -110,18 +151,19 @@ The repository should be an empty or existing git repo. Song Classifier will:
 
 ```bash
 # Process files without syncing
-song-classifier ~/Music/sets --no-sync
+song-classifier process ~/Music/sets --no-sync
 ```
 
 ### View configuration
 
 ```bash
-song-classifier --show-config
+song-classifier config show
 ```
 
 This shows:
 - Config directory location
 - Configured sync repository (if any)
+- WebDAV credentials status
 
 ## Configuration
 
@@ -138,7 +180,7 @@ All configuration and data is stored in `~/.config/song-classifier/`:
 
 ### Data files
 
-- **metadata.csv** - Contains all processed tracks with columns: `key`, `track`, `artist`, `album`, `genre`, `date`
+- **metadata.csv** - Contains all processed tracks with columns: `key`, `track`, `artist`, `album_name`, `album_artist`, `genre`, `date`
 - **albums.csv** - Album catalog used for AI suggestions with columns: `name`, `artist`
 
 ## How it works

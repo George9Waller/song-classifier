@@ -6,6 +6,8 @@ import os
 import sys
 from typing import Union
 
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+
 from src.utils.ai_metadata import MissingAPIKeyError, validate_api_key
 from src.utils.config import (
     get_or_create_config_dir,
@@ -49,7 +51,6 @@ async def process_files(
     skip_processed: bool,
     skip_in_metadata: bool,
     dry_run: bool,
-    verbose: bool,
 ) -> int:
     """Process a list of audio files.
 
@@ -60,27 +61,34 @@ async def process_files(
         skip_processed: Skip already-processed files.
         skip_in_metadata: Skip files already in metadata.csv.
         dry_run: Show what would be done without making changes.
-        verbose: Enable verbose output.
 
     Returns:
         Number of files processed.
     """
-    logger = get_logger()
-    total = len(files)
     processed = 0
 
-    for i, filename in enumerate(files, 1):
-        logger.info(f"[{i}/{total}] {filename}")
-        result = await classify_filename(
-            filename,
-            base_path,
-            file_transport=file_transport,
-            skip_processed_files=skip_processed,
-            skip_files_in_metadata=skip_in_metadata,
-            dry_run=dry_run,
-        )
-        if result is not None:
-            processed += 1
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TextColumn("[cyan]{task.fields[filename]}"),
+    ) as progress:
+        task = progress.add_task("Processing...", total=len(files), filename="")
+
+        for filename in files:
+            progress.update(task, filename=filename)
+            result = await classify_filename(
+                filename,
+                base_path,
+                file_transport=file_transport,
+                skip_processed_files=skip_processed,
+                skip_files_in_metadata=skip_in_metadata,
+                dry_run=dry_run,
+            )
+            if result is not None:
+                processed += 1
+            progress.advance(task)
 
     return processed
 
@@ -143,7 +151,6 @@ def cmd_process(args: argparse.Namespace) -> None:
                 skip_processed,
                 skip_in_metadata,
                 args.dry_run,
-                args.verbose,
             )
         )
     except KeyboardInterrupt:
