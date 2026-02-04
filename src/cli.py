@@ -51,6 +51,7 @@ async def process_files(
     skip_processed: bool,
     skip_in_metadata: bool,
     dry_run: bool,
+    auto_accept_metadata: bool = False,
 ) -> int:
     """Process a list of audio files.
 
@@ -85,6 +86,7 @@ async def process_files(
                 skip_processed_files=skip_processed,
                 skip_files_in_metadata=skip_in_metadata,
                 dry_run=dry_run,
+                auto_accept_metadata=auto_accept_metadata,
             )
             if result is not None:
                 processed += 1
@@ -151,6 +153,7 @@ def cmd_process(args: argparse.Namespace) -> None:
                 skip_processed,
                 skip_in_metadata,
                 args.dry_run,
+                auto_accept_metadata=args.yes,
             )
         )
     except KeyboardInterrupt:
@@ -245,6 +248,11 @@ def main() -> None:
         "--no-sync",
         action="store_true",
         help="Skip git sync even if a repository is configured",
+    )
+    process_parser.add_argument(
+        "-y", "--yes",
+        action="store_true",
+        help="Automatically confirm all metadata without confirming in a UI (use with caution)",
     )
     process_parser.add_argument(
         "--dry-run",
@@ -353,6 +361,11 @@ def main() -> None:
             "-V", "--verbose",
             action="store_true",
             help="Enable verbose output",
+        )
+        legacy_parser.add_argument(
+            "-y", "--yes",
+            action="store_true",
+            help="Automatically confirm all metadata without confirming in a UI (use with caution)",
         )
 
         args = legacy_parser.parse_args()

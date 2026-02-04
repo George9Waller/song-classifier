@@ -19,6 +19,7 @@ async def classify_filename(
     skip_processed_files: bool = True,
     skip_files_in_metadata: bool = False,
     dry_run: bool = False,
+    auto_accept_metadata: bool = False,
 ) -> Optional[TrackMetadata]:
     """Classify a single audio file using AI metadata inference.
 
@@ -73,8 +74,11 @@ async def classify_filename(
                 pass
         return ai_metadata
 
-    # UI confirm (blocking - Textual handles its own event loop)
-    confirmed = await confirm_metadata(ai_metadata)
+    if auto_accept_metadata:
+        confirmed = ai_metadata
+    else:
+        # UI confirm (blocking - Textual handles its own event loop)
+        confirmed = await confirm_metadata(ai_metadata)
 
     # Upsert album and track CSV metadata
     logger.debug("  Saving to metadata CSV")
