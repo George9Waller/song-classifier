@@ -23,7 +23,7 @@ A CLI tool that auto-tags music files (DJ sets, live recordings) using AI to inf
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/song-classifier.git
+git clone https://github.com/George9Waller/song-classifier.git
 cd song-classifier
 
 # Create virtual environment and install
@@ -38,10 +38,10 @@ uv pip install -e ".[dev]"
 
 ```bash
 # Install with pipx for global access
-pipx install git+https://github.com/yourusername/song-classifier.git
+pipx install git+https://github.com/George9Waller/song-classifier.git
 
 # Or with uv
-uv tool install git+https://github.com/yourusername/song-classifier.git
+uv tool install git+https://github.com/George9Waller/song-classifier.git
 ```
 
 ### Set up OpenAI API key
