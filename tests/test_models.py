@@ -1,7 +1,5 @@
 """Tests for data models."""
 
-import pytest
-
 from src.data.models import AlbumMetadata, TrackMetadata
 
 

@@ -1,6 +1,5 @@
 """Tests for file transport module."""
 
-import os
 from pathlib import Path
 
 import pytest

@@ -39,6 +39,20 @@ export OPENAI_API_KEY=your_key_here
 
 Add this to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) to persist across sessions.
 
+### Linting
+This project uses ruff for linting.
+
+```bash
+uv run ruff check .
+```
+
+### Tests
+This project has tests configured with pytest.
+
+```bash
+uv run pytest
+```
+
 ## Usage
 
 ### Basic usage

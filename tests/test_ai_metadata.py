@@ -1,11 +1,10 @@
 """Tests for AI metadata module."""
 
-import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.data.models import AlbumMetadata, TrackMetadata
+from src.data.models import TrackMetadata
 from src.utils.ai_metadata import (
     MissingAPIKeyError,
     _build_prompt,

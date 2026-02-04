@@ -2,18 +2,12 @@
 
 from pathlib import Path
 
-import pytest
-
 from src.data import (
-    TRACK_FIELDNAMES,
-    ALBUM_FIELDNAMES,
     _read_csv_rows,
     _is_legacy_track_format,
     _migrate_legacy_track_row,
     _read_track_metadata,
     _read_album_metadata,
-    get_file_metadata,
-    get_album_metadata,
     upsert_album_metadata,
     upsert_track_metadata,
     clear_cache,
