@@ -35,9 +35,11 @@ async def classify_filename(
         The confirmed TrackMetadata if processed, None if skipped.
     """
     logger = get_logger()
-    logger.info(f"Processing: {filename}")
+    logger.debug(f"Processing: {filename}")
 
-    if skip_files_in_metadata and get_file_metadata(key=filename):
+    stored_metadata = get_file_metadata(key=filename)
+
+    if skip_files_in_metadata and stored_metadata is not None:
         logger.info("  Skipping: already in metadata")
         return None
 
@@ -59,26 +61,30 @@ async def classify_filename(
                 pass
         return None
 
-    # AI parse using filename
-    logger.debug("  Inferring metadata with AI")
-    ai_metadata = await parse_metadata_with_ai(filename, existing)
+    # Get metadata from stored metadata or ai
+    if stored_metadata is not None:
+        metadata_to_set = stored_metadata
+    else:
+        # AI parse using filename
+        logger.debug("  Inferring metadata with AI")
+        metadata_to_set = await parse_metadata_with_ai(filename, existing)
 
     if dry_run:
-        logger.info(f"  Would set: {ai_metadata.track} by {ai_metadata.artist}")
-        logger.info(f"    Album: {ai_metadata.album.name} ({ai_metadata.album.artist})")
-        logger.info(f"    Genre: {ai_metadata.genre}, Date: {ai_metadata.date}")
+        logger.info(f"  Would set: {metadata_to_set.track} by {metadata_to_set.artist}")
+        logger.info(f"    Album: {metadata_to_set.album.name} ({metadata_to_set.album.artist})")
+        logger.info(f"    Genre: {metadata_to_set.genre}, Date: {metadata_to_set.date}")
         if file_transport.cleanup_local_files:
             try:
                 os.remove(local_path)
             except OSError:
                 pass
-        return ai_metadata
+        return metadata_to_set
 
     if auto_accept_metadata:
-        confirmed = ai_metadata
+        confirmed = metadata_to_set
     else:
         # UI confirm (blocking - Textual handles its own event loop)
-        confirmed = await confirm_metadata(ai_metadata)
+        confirmed = await confirm_metadata(metadata_to_set)
 
     # Upsert album and track CSV metadata
     logger.debug("  Saving to metadata CSV")
