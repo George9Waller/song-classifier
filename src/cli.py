@@ -2,12 +2,51 @@
 
 import argparse
 
-from src.commands.config import cmd_config_show, cmd_config_set_webdav, cmd_config_set_sync_repo
+from src.commands.config import (
+    cmd_config_show,
+    cmd_config_set_webdav,
+    cmd_config_set_sync_repo,
+)
+from src.commands.organize import cmd_organize
 from src.commands.process import cmd_process
+from src.commands.sync_metadata import cmd_sync_metadata
 from src.utils.git_sync import set_sync_repo
 from src.utils.logging import setup_logging
 
 __version__ = "0.1.0"
+
+
+FILE_TRANSPORT_ARGUMENTS = [
+    (
+        "path",
+        {
+            "nargs": "?",
+            "default": None,
+            "help": "Directory to scan (default: current directory)",
+        },
+    ),
+    (
+        "--webdav",
+        {
+            "metavar": "HOST",
+            "help": "WebDAV host URL to use instead of local filesystem",
+        },
+    ),
+    (
+        "--webdav-user",
+        {
+            "metavar": "USER",
+            "help": "WebDAV username (or set WEBDAV_USERNAME env var)",
+        },
+    ),
+    (
+        "--webdav-password",
+        {
+            "metavar": "PASS",
+            "help": "WebDAV password (or set WEBDAV_PASSWORD env var)",
+        },
+    ),
+]
 
 
 def main() -> None:
@@ -17,7 +56,8 @@ def main() -> None:
         description="Auto-tag music files using AI to infer metadata from filenames",
     )
     parser.add_argument(
-        "-v", "--version",
+        "-v",
+        "--version",
         action="version",
         version=f"%(prog)s {__version__}",
     )
@@ -29,27 +69,8 @@ def main() -> None:
         "process",
         help="Process audio files in a directory",
     )
-    process_parser.add_argument(
-        "path",
-        nargs="?",
-        default=None,
-        help="Directory to scan (default: current directory)",
-    )
-    process_parser.add_argument(
-        "--webdav",
-        metavar="HOST",
-        help="WebDAV host URL to use instead of local filesystem",
-    )
-    process_parser.add_argument(
-        "--webdav-user",
-        metavar="USER",
-        help="WebDAV username (or set WEBDAV_USERNAME env var)",
-    )
-    process_parser.add_argument(
-        "--webdav-password",
-        metavar="PASS",
-        help="WebDAV password (or set WEBDAV_PASSWORD env var)",
-    )
+    for name, arg in FILE_TRANSPORT_ARGUMENTS:
+        process_parser.add_argument(name, **arg)
     process_parser.add_argument(
         "--no-skip-processed",
         action="store_true",
@@ -66,7 +87,8 @@ def main() -> None:
         help="Skip git sync even if a repository is configured",
     )
     process_parser.add_argument(
-        "-y", "--yes",
+        "-y",
+        "--yes",
         action="store_true",
         help="Automatically confirm all metadata without confirming in a UI (use with caution)",
     )
@@ -76,18 +98,62 @@ def main() -> None:
         help="Show what would be done without making changes",
     )
     process_parser.add_argument(
-        "-V", "--verbose",
+        "-V",
+        "--verbose",
         action="store_true",
         help="Enable verbose output",
     )
     process_parser.set_defaults(func=cmd_process)
 
+    # Organize command group
+    organize_parser = subparsers.add_parser(
+        "organize",
+        help="Organize files into Artist/Album/ directory structure based on metadata",
+    )
+    for name, arg in FILE_TRANSPORT_ARGUMENTS:
+        organize_parser.add_argument(name, **arg)
+    organize_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+    organize_parser.add_argument(
+        "-V", "--verbose", action="store_true", help="Enable verbose output"
+    )
+    organize_parser.set_defaults(func=cmd_organize)
+
+    # Sync metadata command group
+    sync_parser = subparsers.add_parser(
+        "sync-metadata",
+        help="Sync stored metadata with file metadata tags (update file tags to match stored metadata or store file tags if no stored metadata)",
+    )
+    for name, arg in FILE_TRANSPORT_ARGUMENTS:
+        sync_parser.add_argument(name, **arg)
+    sync_parser.add_argument(
+        "--no-sync",
+        action="store_true",
+        help="Skip git sync even if a repository is configured",
+    )
+    sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+    sync_parser.add_argument(
+        "-V", "--verbose", action="store_true", help="Enable verbose output"
+    )
+    sync_parser.set_defaults(func=cmd_sync_metadata)
+
     # Config command group
     config_parser = subparsers.add_parser("config", help="Configuration management")
-    config_subparsers = config_parser.add_subparsers(dest="config_command", help="Config commands")
+    config_subparsers = config_parser.add_subparsers(
+        dest="config_command", help="Config commands"
+    )
 
     # config show
-    config_show_parser = config_subparsers.add_parser("show", help="Show current configuration")
+    config_show_parser = config_subparsers.add_parser(
+        "show", help="Show current configuration"
+    )
     config_show_parser.set_defaults(func=cmd_config_show)
 
     # config set-sync-repo
@@ -117,31 +183,13 @@ def main() -> None:
             prog="song-classifier",
             description="Auto-tag music files using AI to infer metadata from filenames",
         )
+        for name, arg in FILE_TRANSPORT_ARGUMENTS:
+            legacy_parser.add_argument(name, **arg)
         legacy_parser.add_argument(
-            "path",
-            nargs="?",
-            default=None,
-            help="Directory to scan (default: current directory)",
-        )
-        legacy_parser.add_argument(
-            "-v", "--version",
+            "-v",
+            "--version",
             action="version",
             version=f"%(prog)s {__version__}",
-        )
-        legacy_parser.add_argument(
-            "--webdav",
-            metavar="HOST",
-            help="WebDAV host URL to use instead of local filesystem",
-        )
-        legacy_parser.add_argument(
-            "--webdav-user",
-            metavar="USER",
-            help="WebDAV username",
-        )
-        legacy_parser.add_argument(
-            "--webdav-password",
-            metavar="PASS",
-            help="WebDAV password",
         )
         legacy_parser.add_argument(
             "--no-skip-processed",
@@ -169,17 +217,29 @@ def main() -> None:
             help="Show current configuration and exit",
         )
         legacy_parser.add_argument(
+            "--organize",
+            action="store_true",
+            help="Organize files into Artist/Album/ directory structure based on metadata",
+        )
+        legacy_parser.add_argument(
+            "--sync-metadata",
+            action="store_true",
+            help="Sync stored metadata with file metadata tags (update file tags to match stored metadata or store file tags if no stored metadata)",
+        )
+        legacy_parser.add_argument(
             "--dry-run",
             action="store_true",
             help="Show what would be done without making changes",
         )
         legacy_parser.add_argument(
-            "-V", "--verbose",
+            "-V",
+            "--verbose",
             action="store_true",
             help="Enable verbose output",
         )
         legacy_parser.add_argument(
-            "-y", "--yes",
+            "-y",
+            "--yes",
             action="store_true",
             help="Automatically confirm all metadata without confirming in a UI (use with caution)",
         )
@@ -197,12 +257,22 @@ def main() -> None:
             cmd_config_show(args)
             return
 
+        if args.organize:
+            cmd_organize(args)
+            return
+
         # Default to process command
+        if args.sync_metadata:
+            cmd_sync_metadata(args)
+            return
+
         cmd_process(args)
         return
 
     # Handle config command without subcommand
-    if args.command == "config" and (not hasattr(args, "config_command") or args.config_command is None):
+    if args.command == "config" and (
+        not hasattr(args, "config_command") or args.config_command is None
+    ):
         cmd_config_show(args)
         return
 

@@ -3,14 +3,20 @@ import asyncio
 import sys
 from typing import Union
 
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import Progress
 
+from src.constants import DEFAULT_PATH
 from src.scripts import classify_filename
 from src.utils.ai_metadata import MissingAPIKeyError, validate_api_key
-from src.utils.file_transport import FileTransport, LocalTransport, WebdavTransport, TransportType
+from src.utils.file_transport import (
+    LocalTransport,
+    WebdavTransport,
+    get_file_transport_for_args,
+)
 from src.utils.git_sync import pull_metadata, push_metadata
 from src.utils.logging import setup_logging
-from src.utils.path import validate_path
+from src.utils.path import validate_path_or_exit
+from src.utils.progress import PROGRESS_COLUMNS
 
 
 async def process_files(
@@ -37,19 +43,14 @@ async def process_files(
     """
     processed = 0
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        TextColumn("[cyan]{task.fields[filename]}"),
-    ) as progress:
+    with Progress(*PROGRESS_COLUMNS) as progress:
         task = progress.add_task("Processing...", total=len(files), filename="")
 
         for filename in files:
+            base_filename = file_transport.get_basename_from_path(filename)
             progress.update(task, filename=filename, refresh=True)
             result = await classify_filename(
-                filename,
+                base_filename,
                 base_path,
                 file_transport=file_transport,
                 skip_processed_files=skip_processed,
@@ -77,13 +78,8 @@ def cmd_process(args: argparse.Namespace) -> None:
             sys.exit(1)
 
     # Validate path
-    try:
-        path = validate_path(args.path or ".")
-    except ValueError as e:
-        logger.error(str(e))
-        sys.exit(1)
+    path = validate_path_or_exit(args.path or DEFAULT_PATH)
 
-    transport_type = TransportType.WEBDAV if args.webdav else TransportType.LOCAL
     skip_processed = not args.no_skip_processed
     skip_in_metadata = not args.no_skip_in_metadata
 
@@ -91,16 +87,7 @@ def cmd_process(args: argparse.Namespace) -> None:
     if not args.no_sync:
         pull_metadata()
 
-    # Create transport with optional WebDAV credentials
-    webdav_user = args.webdav_user if hasattr(args, "webdav_user") else None
-    webdav_pass = args.webdav_password if hasattr(args, "webdav_password") else None
-
-    file_transport = FileTransport(
-        transport_type,
-        webdav_host=args.webdav,
-        webdav_username=webdav_user,
-        webdav_password=webdav_pass,
-    )
+    file_transport = get_file_transport_for_args(args)
 
     # Collect files
     logger.info(f"Scanning {path}...")

@@ -10,7 +10,6 @@ from src.data.models import AlbumMetadata, TrackMetadata
 from src.data import get_album_metadata
 from src.utils.constants import VARIOUS_ARTISTS
 
-
 GENRE_OPTIONS: list[str] = [
     "House",
     "Techno",
@@ -58,7 +57,9 @@ def _build_album_options(
         option_values.insert(0, initial.album.name)
 
     # Determine default value
-    desired_default = initial.album.name if (initial.album and initial.album.name) else None
+    desired_default = (
+        initial.album.name if (initial.album and initial.album.name) else None
+    )
     if desired_default and desired_default in option_values:
         default_value = desired_default
     elif option_values:
@@ -99,7 +100,9 @@ class ConfirmMetadataApp(App[TrackMetadata]):
         # Build album options
         albums = get_album_metadata()
         album_list = albums if isinstance(albums, list) else []
-        album_options, default_album_value = _build_album_options(self.initial, album_list)
+        album_options, default_album_value = _build_album_options(
+            self.initial, album_list
+        )
 
         yield Vertical(
             Label(f"File: {self.initial.key}"),
@@ -201,7 +204,7 @@ class ConfirmMetadataApp(App[TrackMetadata]):
                 va_checkbox.value = False
                 album_artist_input.disabled = False
                 # Set album artist from known albums
-                for a in (get_album_metadata() or []):
+                for a in get_album_metadata() or []:
                     if a.name == value:
                         album_artist_input.value = a.artist
                         break

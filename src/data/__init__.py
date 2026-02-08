@@ -5,10 +5,21 @@ import os
 from typing import Optional
 
 from src.data.models import AlbumMetadata, TrackMetadata
-from src.utils.config import get_or_create_metadata_file_path, get_or_create_albums_file_path
+from src.utils.config import (
+    get_or_create_metadata_file_path,
+    get_or_create_albums_file_path,
+)
 
 # CSV field names
-TRACK_FIELDNAMES = ["key", "track", "artist", "album_name", "album_artist", "genre", "date"]
+TRACK_FIELDNAMES = [
+    "key",
+    "track",
+    "artist",
+    "album_name",
+    "album_artist",
+    "genre",
+    "date",
+]
 ALBUM_FIELDNAMES = ["name", "artist"]
 
 # Legacy field names for backwards compatibility
@@ -48,7 +59,9 @@ def _migrate_legacy_track_row(row: dict[str, str]) -> dict[str, str]:
     }
 
 
-def _read_track_metadata(file_path: str, use_cache: bool = False) -> list[TrackMetadata]:
+def _read_track_metadata(
+    file_path: str, use_cache: bool = False
+) -> list[TrackMetadata]:
     """Read track metadata from CSV file."""
     if use_cache and file_path in CACHE:
         return CACHE[file_path]
@@ -67,7 +80,9 @@ def _read_track_metadata(file_path: str, use_cache: bool = False) -> list[TrackM
     return tracks
 
 
-def _read_album_metadata(file_path: str, use_cache: bool = False) -> list[AlbumMetadata]:
+def _read_album_metadata(
+    file_path: str, use_cache: bool = False
+) -> list[AlbumMetadata]:
     """Read album metadata from CSV file."""
     if use_cache and file_path in CACHE:
         return CACHE[file_path]
@@ -88,7 +103,9 @@ def _ensure_parent_dir(path: str) -> None:
         os.makedirs(parent, exist_ok=True)
 
 
-def _write_csv(file_path: str, rows: list[dict[str, str]], fieldnames: list[str]) -> None:
+def _write_csv(
+    file_path: str, rows: list[dict[str, str]], fieldnames: list[str]
+) -> None:
     """Write rows to CSV file."""
     _ensure_parent_dir(file_path)
     with open(file_path, mode="w", encoding="utf-8", newline="") as f:
@@ -101,8 +118,10 @@ def _write_csv(file_path: str, rows: list[dict[str, str]], fieldnames: list[str]
         del CACHE[file_path]
 
 
-def get_file_metadata(key: Optional[str] = None) -> TrackMetadata | list[TrackMetadata] | None:
-    """Get track metadata by key, or all tracks if no key provided."""
+def get_file_metadata(
+    key: Optional[str] = None,
+) -> TrackMetadata | list[TrackMetadata] | None:
+    """Get track metadata by key, or all tracks if no key provided. The file basename should be used as the key."""
     file_path = str(get_or_create_metadata_file_path())
     tracks = _read_track_metadata(file_path)
     if key:
@@ -110,7 +129,9 @@ def get_file_metadata(key: Optional[str] = None) -> TrackMetadata | list[TrackMe
     return tracks
 
 
-def get_album_metadata(key: Optional[str] = None) -> AlbumMetadata | list[AlbumMetadata] | None:
+def get_album_metadata(
+    key: Optional[str] = None,
+) -> AlbumMetadata | list[AlbumMetadata] | None:
     """Get album metadata by name, or all albums if no key provided."""
     file_path = str(get_or_create_albums_file_path())
     albums = _read_album_metadata(file_path)

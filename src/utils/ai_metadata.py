@@ -92,11 +92,11 @@ def _build_prompt(filename: str, existing: Optional[TrackMetadata]) -> str:
         "You are a music metadata expert. Given an audio filename, infer the most likely track metadata.\n"
         "Return STRICT JSON only with this exact schema and no extra keys: \n"
         "{\n"
-        "  \"track\": string,\n"
-        "  \"artist\": string,\n"
-        "  \"album\": { \"name\": string, \"artist\": string },\n"
-        "  \"genre\": string,\n"
-        "  \"date\": string | null  // ISO-8601 yyyy or yyyy-mm-dd if known, else null\n"
+        '  "track": string,\n'
+        '  "artist": string,\n'
+        '  "album": { "name": string, "artist": string },\n'
+        '  "genre": string,\n'
+        '  "date": string | null  // ISO-8601 yyyy or yyyy-mm-dd if known, else null\n'
         "}\n\n"
         "Album selection rules (do NOT guess from filename beyond these rules):\n"
         "- If the content is a festival/event, the album should be the festival name with the year (e.g., 'Coachella 2022'). The album artist is 'Various Artists'.\n"
@@ -168,7 +168,10 @@ async def parse_metadata_with_ai(
     completion = await client.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": "You are a helpful assistant that returns strict JSON only."},
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that returns strict JSON only.",
+            },
             {"role": "user", "content": prompt},
         ],
         temperature=1,

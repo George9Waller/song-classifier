@@ -6,7 +6,11 @@ from typing import Optional, Union
 from src.data import get_file_metadata, upsert_album_metadata, upsert_track_metadata
 from src.data.models import TrackMetadata
 from src.utils.ai_metadata import parse_metadata_with_ai
-from src.utils.file_metadata import read_file_metadata, write_file_metadata, is_already_processed
+from src.utils.file_metadata import (
+    read_file_metadata,
+    write_file_metadata,
+    is_already_processed,
+)
 from src.utils.file_transport import LocalTransport, WebdavTransport
 from src.utils.logging import get_logger
 from src.utils.ui_confirm import confirm_metadata
@@ -54,11 +58,7 @@ async def classify_filename(
     # If already processed, skip and delete temp
     if skip_processed_files and is_already_processed(local_path):
         logger.info("  Skipping: already processed")
-        if file_transport.cleanup_local_files:
-            try:
-                os.remove(local_path)
-            except OSError:
-                pass
+        file_transport.cleanup_local_file_if_needed(local_path)
         return None
 
     # Get metadata from stored metadata or ai
@@ -71,13 +71,11 @@ async def classify_filename(
 
     if dry_run:
         logger.info(f"  Would set: {metadata_to_set.track} by {metadata_to_set.artist}")
-        logger.info(f"    Album: {metadata_to_set.album.name} ({metadata_to_set.album.artist})")
+        logger.info(
+            f"    Album: {metadata_to_set.album.name} ({metadata_to_set.album.artist})"
+        )
         logger.info(f"    Genre: {metadata_to_set.genre}, Date: {metadata_to_set.date}")
-        if file_transport.cleanup_local_files:
-            try:
-                os.remove(local_path)
-            except OSError:
-                pass
+        file_transport.cleanup_local_file_if_needed(local_path)
         return metadata_to_set
 
     if auto_accept_metadata:
@@ -100,11 +98,7 @@ async def classify_filename(
     file_transport.save_file(local_path, base_path, filename)
 
     # Clean up local temp file
-    if file_transport.cleanup_local_files:
-        try:
-            os.remove(local_path)
-        except OSError:
-            pass
+    file_transport.cleanup_local_file_if_needed(local_path)
 
     logger.info(f"  Done: {confirmed.track} by {confirmed.artist}")
     return confirmed

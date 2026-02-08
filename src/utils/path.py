@@ -1,4 +1,7 @@
 import os
+import sys
+
+from src.utils.logging import get_logger
 
 
 def validate_path(path: str) -> str:
@@ -21,3 +24,15 @@ def validate_path(path: str) -> str:
     # Resolve symlinks and check for path traversal
     real_path = os.path.realpath(path)
     return real_path
+
+
+def validate_path_or_exit(path: str):
+    logger = get_logger()
+
+    try:
+        valid_path = validate_path(path)
+        logger.debug(f"Validated path: {valid_path}")
+        return valid_path
+    except ValueError as e:
+        logger.error(str(e))
+        sys.exit(1)

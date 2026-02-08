@@ -4,6 +4,8 @@ import logging
 import sys
 from typing import Optional
 
+from rich.logging import RichHandler
+
 _logger: Optional[logging.Logger] = None
 
 
@@ -27,7 +29,7 @@ def setup_logging(verbose: bool = False) -> logging.Logger:
     logging.basicConfig(
         level=level,
         format="%(levelname)s: %(message)s",
-        stream=sys.stderr,
+        handlers=[RichHandler(rich_tracebacks=True)],
     )
 
     _logger = logging.getLogger("song-classifier")

@@ -101,6 +101,7 @@ def _from_mp4(path: str) -> Optional[TrackMetadata]:
     title = _safe_first(tags.get("\xa9nam"))
     artist = _safe_first(tags.get("\xa9ART"))
     album = _safe_first(tags.get("\xa9alb"))
+    album_artist = _safe_first(tags.get("aART"))
     genre = _safe_first(tags.get("\xa9gen"))
     date = _safe_first(tags.get("\xa9day"))
 
@@ -111,7 +112,7 @@ def _from_mp4(path: str) -> Optional[TrackMetadata]:
         key=path,
         track=title or "",
         artist=artist or "",
-        album=AlbumMetadata(name=album or "", artist=artist or ""),
+        album=AlbumMetadata(name=album or "", artist=album_artist or artist or ""),
         genre=genre or "",
         date=date,
     )
@@ -278,7 +279,9 @@ def is_already_processed(path: str) -> bool:
                 pass
             try:
                 vorb = OggVorbis(path)
-                return _has_marker_in_list(vorb.tags.get("comment") if vorb.tags else None, PROCESSED_MARKER)
+                return _has_marker_in_list(
+                    vorb.tags.get("comment") if vorb.tags else None, PROCESSED_MARKER
+                )
             except MutagenError:
                 return False
 
@@ -326,8 +329,7 @@ def _write_mp3(path: str, meta: TrackMetadata) -> None:
     audio["album"] = meta.album.name
     audio["albumartist"] = meta.album.artist
     audio["genre"] = meta.genre
-    if meta.date:
-        audio["date"] = meta.date
+    audio["date"] = meta.date
     audio.save()
 
     # Ensure processed marker exists in an ID3 COMM frame
@@ -344,7 +346,9 @@ def _write_mp3(path: str, meta: TrackMetadata) -> None:
             break
 
     if not has_marker:
-        id3.add(COMM(encoding=3, lang="eng", desc="song-classifier", text=PROCESSED_MARKER))
+        id3.add(
+            COMM(encoding=3, lang="eng", desc="song-classifier", text=PROCESSED_MARKER)
+        )
     id3.save(path)
 
 
@@ -356,8 +360,7 @@ def _write_flac(path: str, meta: TrackMetadata) -> None:
     audio["album"] = meta.album.name
     audio["albumartist"] = meta.album.artist
     audio["genre"] = meta.genre
-    if meta.date:
-        audio["date"] = meta.date
+    audio["date"] = meta.date or ""
     audio["comment"] = _merge_comment(audio.get("comment"), PROCESSED_MARKER)
     audio.save()
 
@@ -371,8 +374,7 @@ def _write_mp4(path: str, meta: TrackMetadata) -> None:
     tags["\xa9alb"] = meta.album.name
     tags["aART"] = meta.album.artist
     tags["\xa9gen"] = meta.genre
-    if meta.date:
-        tags["\xa9day"] = meta.date
+    tags["\xa9day"] = meta.date or ""
     existing = tags.get("\xa9cmt")
     tags["\xa9cmt"] = _merge_comment(existing, PROCESSED_MARKER)
     audio.tags = tags
@@ -388,8 +390,7 @@ def _write_ogg_opus(path: str, meta: TrackMetadata) -> None:
     tags["album"] = meta.album.name
     tags["albumartist"] = meta.album.artist
     tags["genre"] = meta.genre
-    if meta.date:
-        tags["date"] = meta.date
+    tags["date"] = meta.date or ""
     existing = tags.get("comment")
     tags["comment"] = _merge_comment(existing, PROCESSED_MARKER)
     audio.tags = tags
@@ -405,8 +406,7 @@ def _write_ogg_vorbis(path: str, meta: TrackMetadata) -> None:
     tags["album"] = meta.album.name
     tags["albumartist"] = meta.album.artist
     tags["genre"] = meta.genre
-    if meta.date:
-        tags["date"] = meta.date
+    tags["date"] = meta.date or ""
     existing = tags.get("comment")
     tags["comment"] = _merge_comment(existing, PROCESSED_MARKER)
     audio.tags = tags

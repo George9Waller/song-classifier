@@ -44,7 +44,9 @@ def set_sync_repo(repo_url: str) -> None:
     logger.info(f"Sync repository configured: {repo_url}")
 
 
-def _run_git(args: list[str], cwd: Path, check: bool = True) -> subprocess.CompletedProcess:
+def _run_git(
+    args: list[str], cwd: Path, check: bool = True
+) -> subprocess.CompletedProcess:
     """Run a git command in the specified directory."""
     return subprocess.run(
         ["git"] + args,
@@ -159,7 +161,7 @@ def push_metadata() -> bool:
         result = _run_git(
             ["commit", "-m", "Update metadata from song-classifier"],
             cwd=repo_dir,
-            check=False
+            check=False,
         )
         if result.returncode != 0 and "nothing to commit" not in result.stdout:
             logger.warning(f"git commit failed: {result.stderr}")
@@ -168,7 +170,9 @@ def push_metadata() -> bool:
         result = _run_git(["push"], cwd=repo_dir, check=False)
         if result.returncode != 0:
             logger.warning(f"git push failed: {result.stderr}")
-            logger.warning("Changes committed locally but not pushed. Push manually later.")
+            logger.warning(
+                "Changes committed locally but not pushed. Push manually later."
+            )
             return False
 
         logger.info("Metadata pushed to repository")

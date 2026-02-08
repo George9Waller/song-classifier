@@ -11,28 +11,28 @@ from typing import Optional
 
 def get_or_create_config_dir() -> Path:
     """Get or create the config directory using XDG paths."""
-    if os.name == 'nt':  # Windows
-        base = Path(os.environ.get('APPDATA', Path.home()))
+    if os.name == "nt":  # Windows
+        base = Path(os.environ.get("APPDATA", Path.home()))
     else:
-        base = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
-    config_dir = base / 'song-classifier'
+        base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    config_dir = base / "song-classifier"
     config_dir.mkdir(parents=True, exist_ok=True)
     return config_dir
 
 
 def get_or_create_metadata_file_path() -> Path:
     """Get path to the metadata CSV file."""
-    return get_or_create_config_dir() / 'metadata.csv'
+    return get_or_create_config_dir() / "metadata.csv"
 
 
 def get_or_create_albums_file_path() -> Path:
     """Get path to the albums CSV file."""
-    return get_or_create_config_dir() / 'albums.csv'
+    return get_or_create_config_dir() / "albums.csv"
 
 
 def get_or_create_temp_dir() -> Path:
     """Get or create the temp directory for WebDAV downloads."""
-    temp_dir = get_or_create_config_dir() / 'temp'
+    temp_dir = get_or_create_config_dir() / "temp"
     temp_dir.mkdir(parents=True, exist_ok=True)
     return temp_dir
 

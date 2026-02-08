@@ -81,7 +81,9 @@ class TestMetadataReading:
         assert tracks[0].key == "test1.mp3"
         assert tracks[0].album.name == "Album One"
 
-    def test_read_legacy_track_metadata(self, temp_dir: Path, legacy_csv_content: str) -> None:
+    def test_read_legacy_track_metadata(
+        self, temp_dir: Path, legacy_csv_content: str
+    ) -> None:
         """Test reading legacy track metadata with migration."""
         csv_path = temp_dir / "metadata.csv"
         csv_path.write_text(legacy_csv_content)
@@ -138,7 +140,9 @@ class TestUpsert:
         assert content.count("Album") == 1
         assert "Artist 2" in content
 
-    def test_upsert_track_new(self, config_dir: Path, sample_track: TrackMetadata) -> None:
+    def test_upsert_track_new(
+        self, config_dir: Path, sample_track: TrackMetadata
+    ) -> None:
         """Test inserting new track."""
         clear_cache()
         upsert_track_metadata(sample_track)
@@ -149,7 +153,9 @@ class TestUpsert:
         assert "test_file.mp3" in content
         assert "Test Track" in content
 
-    def test_upsert_track_update(self, config_dir: Path, sample_album: AlbumMetadata) -> None:
+    def test_upsert_track_update(
+        self, config_dir: Path, sample_album: AlbumMetadata
+    ) -> None:
         """Test updating existing track."""
         clear_cache()
         # Insert first

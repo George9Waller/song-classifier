@@ -1,14 +1,42 @@
 """File transport abstraction for local and WebDAV file systems."""
 
+import argparse
+from multiprocessing.util import get_logger
 import os
 import posixpath
 from enum import Enum
-from typing import Generator, Optional
+from typing import Generator, Iterable, Optional
 
 from webdav3 import client
 
+from src.constants import EXCLUDED_FILENAMES_FOR_EMPTY_DIRECTORY_DELETION
+
+
+def get_file_transport_for_args(args: argparse.Namespace) -> "FileTransport":
+    """Factory function to get the appropriate FileTransport based on CLI args."""
+    if args.webdav:
+        return FileTransport(
+            transport_type=TransportType.WEBDAV,
+            webdav_host=args.webdav,
+            webdav_username=getattr(args, "webdav_user", None),
+            webdav_password=getattr(args, "webdav_password", None),
+        )
+    else:
+        return FileTransport(transport_type=TransportType.LOCAL)
+
+
 # Supported audio file extensions
-AUDIO_EXTENSIONS = {'.mp3', '.flac', '.m4a', '.mp4', '.opus', '.ogg', '.wav', '.aiff', '.aif'}
+AUDIO_EXTENSIONS = {
+    ".mp3",
+    ".flac",
+    ".m4a",
+    ".mp4",
+    ".opus",
+    ".ogg",
+    ".wav",
+    ".aiff",
+    ".aif",
+}
 
 
 def is_audio_file(path: str) -> bool:
@@ -49,7 +77,23 @@ class FileTransport:
             case _:
                 raise NotImplementedError("Unrecognised transport_type")
 
-    def list_files(self, path: str, initial_path: Optional[str] = None) -> Generator[str, None, None]:
+    @staticmethod
+    def get_basename_from_path(path: str) -> str:
+        """Extract base file name from path."""
+        raise NotImplementedError
+
+    @staticmethod
+    def get_parent_directory(path: str) -> str:
+        """Extract parent directory from path."""
+        raise NotImplementedError
+
+    def walk(self, path: str) -> Iterable[str, list[str], list[str]]:
+        """Walk through files in the given path."""
+        raise NotImplementedError
+
+    def list_files(
+        self, path: str, initial_path: Optional[str] = None
+    ) -> Generator[str, None, None]:
         """List audio files in the given path."""
         raise NotImplementedError
 
@@ -57,8 +101,24 @@ class FileTransport:
         """Load file to local path, returns local file path."""
         raise NotImplementedError
 
-    def save_file(self, local_path: str, remote_base_path: str, relative_path: str) -> Optional[str]:
+    def save_file(
+        self, local_path: str, remote_base_path: str, relative_path: str
+    ) -> Optional[str]:
         """Save local file to remote location."""
+        raise NotImplementedError
+
+    def move_file(
+        self, original_path: str, new_path: str, initial_path: Optional[str] = None
+    ) -> None:
+        """Move/rename file from original_path to new_path."""
+        raise NotImplementedError
+
+    def delete_directory_if_exists(self, path: str) -> None:
+        """Delete directory if it exists (used for cleanup of empty directories)."""
+        raise NotImplementedError
+
+    def cleanup_local_file_if_needed(self, local_path: str) -> None:
+        """Delete local file if cleanup is enabled for this transport."""
         raise NotImplementedError
 
 
@@ -66,6 +126,7 @@ class WebdavTransport:
     """WebDAV file transport implementation."""
 
     cleanup_local_files = True
+    client_class = None
 
     def __init__(
         self,
@@ -86,22 +147,40 @@ class WebdavTransport:
         # Get credentials from config/env if not provided
         if username is None or password is None:
             from src.utils.config import get_webdav_credentials
+
             config_user, config_pass = get_webdav_credentials()
             username = username or config_user
             password = password or config_pass
 
-        self.webdav_config = {
-            "webdav_hostname": webdav_host,
-            "webdav_login": username,
-            "webdav_password": password,
-        }
+        self.client_class = client.Client(
+            {
+                "webdav_hostname": webdav_host,
+                "webdav_login": username,
+                "webdav_password": password,
+            }
+        )
 
-    def list_files(self, path: str, initial_path: Optional[str] = None) -> Generator[str, None, None]:
+    @staticmethod
+    def get_basename_from_path(path: str) -> str:
+        return posixpath.basename(path)
+
+    @staticmethod
+    def get_parent_directory(path: str) -> str:
+        return posixpath.dirname(path)
+
+    def walk(self, path: str):
+        items = self.client_class.list(path, get_info=True)
+
+        # TODO: implement walk parsing
+        raise NotImplementedError("walk method not implemented for WebdavTransport")
+
+    def list_files(
+        self, path: str, initial_path: Optional[str] = None
+    ) -> Generator[str, None, None]:
         """List audio files recursively on WebDAV server."""
         initial_path = initial_path or path
 
-        webdav_client = client.Client(self.webdav_config)
-        remote_files = webdav_client.list(path, get_info=True)
+        remote_files = self.client_class.list(path, get_info=True)
         for file in remote_files:
             if file["isdir"]:
                 # Use posixpath for WebDAV paths (always forward slashes)
@@ -121,25 +200,32 @@ class WebdavTransport:
         local_path = os.path.join(str(get_or_create_temp_dir()), path)
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
-        webdav_client = client.Client(self.webdav_config)
         # Use posixpath for remote path construction
         remote_path = posixpath.join(initial_path, path)
-        webdav_client.download_sync(
-            remote_path=remote_path,
-            local_path=local_path
-        )
+        self.client_class.download_sync(remote_path=remote_path, local_path=local_path)
         return local_path
 
-    def save_file(self, local_path: str, remote_base_path: str, relative_path: str) -> str:
+    def save_file(
+        self, local_path: str, remote_base_path: str, relative_path: str
+    ) -> str:
         """Upload file to WebDAV server."""
-        webdav_client = client.Client(self.webdav_config)
+
         # Use posixpath for remote path construction
         remote_path = posixpath.join(remote_base_path, relative_path)
-        webdav_client.upload_sync(
+        self.client_class.upload_sync(
             remote_path=remote_path,
             local_path=local_path,
         )
         return remote_path
+
+    def cleanup_local_file_if_needed(self, local_path: str) -> None:
+        """Delete local file if cleanup is enabled for this transport."""
+        if self.cleanup_local_files and os.path.isfile(local_path):
+            try:
+                os.remove(local_path)
+            except OSError as e:
+                logger = get_logger()
+                logger.warning(f"Failed to delete local file '{local_path}': {e}")
 
 
 class LocalTransport:
@@ -147,16 +233,27 @@ class LocalTransport:
 
     cleanup_local_files = False
 
-    def list_files(self, path: str, initial_path: Optional[str] = None) -> Generator[str, None, None]:
+    @staticmethod
+    def get_basename_from_path(path: str) -> str:
+        return os.path.basename(path)
+
+    @staticmethod
+    def get_parent_directory(path: str) -> str:
+        return os.path.dirname(path)
+
+    def walk(self, path: str):
+        return os.walk(path)
+
+    def list_files(
+        self, path: str, initial_path: Optional[str] = None
+    ) -> Generator[str, None, None]:
         """List audio files recursively in local directory."""
         initial_path = initial_path or path
 
         for entry in os.listdir(path):
             full_path = os.path.join(path, entry)
             if os.path.isdir(full_path):
-                yield from self.list_files(
-                    path=full_path, initial_path=initial_path
-                )
+                yield from self.list_files(path=full_path, initial_path=initial_path)
             elif is_audio_file(entry):
                 relative_path = full_path.replace(initial_path, "").lstrip(os.sep)
                 yield relative_path
@@ -165,6 +262,48 @@ class LocalTransport:
         """Return full local path (no copy needed)."""
         return os.path.join(initial_path, path)
 
-    def save_file(self, local_path: str, remote_base_path: str, relative_path: str) -> None:
+    def save_file(
+        self, local_path: str, remote_base_path: str, relative_path: str
+    ) -> None:
         """No-op for local transport (file already in place)."""
         pass
+
+    def move_file(
+        self, original_path: str, new_path: str, initial_path: Optional[str] = None
+    ) -> None:
+        """Move file to new location."""
+        new_full_path = os.path.join(initial_path or "", new_path)
+        os.makedirs(os.path.dirname(new_full_path), exist_ok=True)
+
+        original_full_path = os.path.join(initial_path or "", original_path)
+        os.rename(original_full_path, new_full_path)
+
+    def delete_directory_if_exists(self, path: str) -> None:
+        """Delete directory if it exists (used for cleanup of empty directories)."""
+        logger = get_logger()
+
+        full_path = os.path.join(path)
+        if os.path.isdir(full_path):
+            # Delete excluded files if they exist
+            for filename in EXCLUDED_FILENAMES_FOR_EMPTY_DIRECTORY_DELETION:
+                excluded_file_path = os.path.join(full_path, filename)
+                if os.path.isfile(excluded_file_path):
+                    try:
+                        os.remove(excluded_file_path)
+                    except OSError as e:
+                        logger.warning(
+                            f"Failed to delete excluded file '{excluded_file_path}': {e}"
+                        )
+            try:
+                os.rmdir(full_path)
+            except OSError as e:
+                logger.warning(f"Failed to delete directory '{path}': {e}")
+
+    def cleanup_local_file_if_needed(self, local_path: str) -> None:
+        """Delete local file if cleanup is enabled for this transport."""
+        if self.cleanup_local_files and os.path.isfile(local_path):
+            try:
+                os.remove(local_path)
+            except OSError as e:
+                logger = get_logger()
+                logger.warning(f"Failed to delete local file '{local_path}': {e}")
