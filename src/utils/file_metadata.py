@@ -6,10 +6,22 @@ from typing import Optional
 from mutagen import MutagenError
 from mutagen.flac import FLAC
 from mutagen.mp3 import EasyMP3
-from mutagen.id3 import ID3, COMM, ID3NoHeaderError
+from mutagen.id3 import (
+    ID3,
+    COMM,
+    ID3NoHeaderError,
+    TextFrame,
+    TIT2,
+    TOPE,
+    TALB,
+    TCON,
+    TDRC,
+    TPE2,
+)
 from mutagen.mp4 import MP4, MP4Tags
-from mutagen.oggopus import OggOpus
+from mutagen.oggopus import OggOpus, OggOpusVComment
 from mutagen.oggvorbis import OggVorbis
+from mutagen.wave import WAVE
 
 from src.data.models import AlbumMetadata, TrackMetadata
 from src.utils.constants import PROCESSED_MARKER
@@ -25,10 +37,18 @@ def _safe_first(value: object) -> Optional[str]:
     Returns:
         First string value or None.
     """
+    if isinstance(value, TextFrame) and value.text:
+        value = value.text
+
+    if isinstance(value, TCON) and value.genres:
+        value = value.genres
+
     if isinstance(value, list) and value:
         return str(value[0])
     if isinstance(value, str):
         return value
+    if isinstance(value, TextFrame) and value.text:
+        return str(value.text[0])
     return None
 
 
@@ -44,6 +64,7 @@ def _from_mp3(path: str) -> Optional[TrackMetadata]:
     title = _safe_first(audio.get("title"))
     artist = _safe_first(audio.get("artist"))
     album = _safe_first(audio.get("album"))
+    album_artist = _safe_first(audio.get("albumartist"))
     genre = _safe_first(audio.get("genre"))
     date = _safe_first(audio.get("date")) or _safe_first(audio.get("originaldate"))
 
@@ -54,7 +75,7 @@ def _from_mp3(path: str) -> Optional[TrackMetadata]:
         key=path,
         track=title or "",
         artist=artist or "",
-        album=AlbumMetadata(name=album or "", artist=artist or ""),
+        album=AlbumMetadata(name=album or "", artist=album_artist or artist or ""),
         genre=genre or "",
         date=date,
     )
@@ -72,6 +93,7 @@ def _from_flac(path: str) -> Optional[TrackMetadata]:
     title = _safe_first(audio.get("title"))
     artist = _safe_first(audio.get("artist"))
     album = _safe_first(audio.get("album"))
+    album_artist = _safe_first(audio.get("albumartist"))
     genre = _safe_first(audio.get("genre"))
     date = _safe_first(audio.get("date"))
 
@@ -82,7 +104,7 @@ def _from_flac(path: str) -> Optional[TrackMetadata]:
         key=path,
         track=title or "",
         artist=artist or "",
-        album=AlbumMetadata(name=album or "", artist=artist or ""),
+        album=AlbumMetadata(name=album or "", artist=album_artist or artist or ""),
         genre=genre or "",
         date=date,
     )
@@ -159,7 +181,7 @@ def _from_ogg_vorbis(path: str) -> Optional[TrackMetadata]:
     title = _safe_first(audio.tags.get("title")) if audio.tags else None
     artist = _safe_first(audio.tags.get("artist")) if audio.tags else None
     album = _safe_first(audio.tags.get("album")) if audio.tags else None
-    albumartist = _safe_first(audio.tags.get("albumartist")) if audio.tags else None
+    album_artist = _safe_first(audio.tags.get("albumartist")) if audio.tags else None
     genre = _safe_first(audio.tags.get("genre")) if audio.tags else None
     date = _safe_first(audio.tags.get("date")) if audio.tags else None
 
@@ -170,7 +192,39 @@ def _from_ogg_vorbis(path: str) -> Optional[TrackMetadata]:
         key=path,
         track=title or "",
         artist=artist or "",
-        album=AlbumMetadata(name=album or "", artist=albumartist or artist or ""),
+        album=AlbumMetadata(name=album or "", artist=album_artist or artist or ""),
+        genre=genre or "",
+        date=date,
+    )
+
+
+def _from_wav(path: str) -> Optional[TrackMetadata]:
+    """
+    Read metadata from WAV file.
+    WAV metadata support is very inconsistent and often missing
+    """
+    logger = get_logger()
+    try:
+        audio = WAVE(path)
+    except MutagenError as e:
+        logger.debug(f"Failed to read WAV {path}: {e}")
+        return None
+
+    title = _safe_first(audio.get(TIT2().FrameID))
+    artist = _safe_first(audio.get(TOPE().FrameID))
+    album = _safe_first(audio.get(TALB().FrameID))
+    album_artist = _safe_first(audio.get(TPE2().FrameID))
+    genre = _safe_first(audio.get(TCON().FrameID))
+    date = _safe_first(audio.get(TDRC().FrameID))
+
+    if not any([title, artist, album, genre, date]):
+        return None
+
+    return TrackMetadata(
+        key=path,
+        track=title or "",
+        artist=artist or "",
+        album=AlbumMetadata(name=album or "", artist=album_artist or artist or ""),
         genre=genre or "",
         date=date,
     )
@@ -199,6 +253,8 @@ def read_file_metadata(path: str) -> Optional[TrackMetadata]:
         return _from_mp4(path)
     if lower.endswith(".opus"):
         return _from_ogg_opus(path)
+    if lower.endswith(".wav"):
+        return _from_wav(path)
     if lower.endswith(".ogg"):
         # Try Opus first (Opus-in-Ogg) then Vorbis
         return _from_ogg_opus(path) or _from_ogg_vorbis(path)
@@ -248,7 +304,7 @@ def is_already_processed(path: str) -> bool:
                 id3 = ID3(path)
             except ID3NoHeaderError:
                 return False
-            for comm in id3.getall("COMM"):
+            for comm in id3.getall(COMM().FrameID):
                 texts = comm.text if isinstance(comm.text, list) else [comm.text]
                 if _has_marker_in_list(texts, PROCESSED_MARKER):
                     return True
@@ -284,6 +340,17 @@ def is_already_processed(path: str) -> bool:
                 )
             except MutagenError:
                 return False
+
+        if lower.endswith(".wav"):
+            audio = WAVE(path)
+            if tags := audio.tags:
+                comments = [
+                    text
+                    for tag in tags.getall(COMM().FrameID)
+                    for text in (tag.text if isinstance(tag.text, list) else [tag.text])
+                ]
+                return _has_marker_in_list(comments, PROCESSED_MARKER)
+            return False
 
     except MutagenError as e:
         logger.debug(f"Error checking processed status for {path}: {e}")
@@ -321,6 +388,20 @@ def _merge_comment(existing: object, marker: str) -> list[str]:
     return values or [marker]
 
 
+def _get_id3_comment_if_not_exists(tags: ID3) -> Optional[COMM]:
+    has_marker = False
+    for comm in tags.getall("COMM"):
+        texts = comm.text if isinstance(comm.text, list) else [comm.text]
+        if _has_marker_in_list(texts, PROCESSED_MARKER):
+            has_marker = True
+            break
+
+    if not has_marker:
+        return COMM(
+            encoding=3, lang="eng", desc="song-classifier", text=PROCESSED_MARKER
+        )
+
+
 def _write_mp3(path: str, meta: TrackMetadata) -> None:
     """Write metadata to MP3 file."""
     audio = EasyMP3(path)
@@ -338,17 +419,9 @@ def _write_mp3(path: str, meta: TrackMetadata) -> None:
     except ID3NoHeaderError:
         id3 = ID3()
 
-    has_marker = False
-    for comm in id3.getall("COMM"):
-        texts = comm.text if isinstance(comm.text, list) else [comm.text]
-        if _has_marker_in_list(texts, PROCESSED_MARKER):
-            has_marker = True
-            break
+    if comm_tag := _get_id3_comment_if_not_exists(id3):
+        id3.add(comm_tag)
 
-    if not has_marker:
-        id3.add(
-            COMM(encoding=3, lang="eng", desc="song-classifier", text=PROCESSED_MARKER)
-        )
     id3.save(path)
 
 
@@ -384,7 +457,15 @@ def _write_mp4(path: str, meta: TrackMetadata) -> None:
 def _write_ogg_opus(path: str, meta: TrackMetadata) -> None:
     """Write metadata to Ogg Opus file."""
     audio = OggOpus(path)
-    tags = audio.tags or {}
+
+    try:
+        audio.add_tags()
+    except MutagenError as e:
+        pass
+
+    with open(path, "rb+") as fileobj:
+        tags = audio.tags or OggOpusVComment(fileobj, info=audio.info)
+
     tags["title"] = meta.track
     tags["artist"] = meta.artist
     tags["album"] = meta.album.name
@@ -409,6 +490,35 @@ def _write_ogg_vorbis(path: str, meta: TrackMetadata) -> None:
     tags["date"] = meta.date or ""
     existing = tags.get("comment")
     tags["comment"] = _merge_comment(existing, PROCESSED_MARKER)
+    audio.tags = tags
+    audio.save()
+
+
+def _write_wav(path: str, meta: TrackMetadata) -> None:
+    """Write metadata to WAV file."""
+
+    tags_to_write = {
+        "title": (TIT2, meta.track),
+        "artist": (TOPE, meta.artist),
+        "album": (TALB, meta.album.name),
+        "albumartist": (TPE2, meta.album.artist),
+        "genre": (TCON, meta.genre),
+        "date": (TDRC, meta.date or ""),
+    }
+
+    audio = WAVE(path)
+    tags = audio.tags or {}
+
+    for key, (frame_cls, value) in tags_to_write.items():
+        if value:
+            if audio.tags:
+                audio.tags.delall(frame_cls().FrameID)
+            tags[key] = frame_cls(text=value)
+
+    if audio.tags:
+        if comm_tag := _get_id3_comment_if_not_exists(audio.tags):
+            tags["comment"] = comm_tag
+
     audio.tags = tags
     audio.save()
 
@@ -441,6 +551,9 @@ def write_file_metadata(path: str, meta: TrackMetadata) -> None:
             return
         if lower.endswith(".opus"):
             _write_ogg_opus(path, meta)
+            return
+        if lower.endswith(".wav"):
+            _write_wav(path, meta)
             return
         if lower.endswith(".ogg"):
             # Try Opus then Vorbis

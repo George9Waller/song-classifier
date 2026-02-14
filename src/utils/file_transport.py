@@ -87,6 +87,10 @@ class FileTransport:
         """Extract parent directory from path."""
         raise NotImplementedError
 
+    def is_dir(path: str) -> bool:
+        """Check if the given path is a directory."""
+        raise NotImplementedError
+
     def walk(self, path: str) -> Iterable[str, list[str], list[str]]:
         """Walk through files in the given path."""
         raise NotImplementedError
@@ -168,6 +172,13 @@ class WebdavTransport:
     def get_parent_directory(path: str) -> str:
         return posixpath.dirname(path)
 
+    def validate_path(self, path: str) -> str:
+        is_dir = self.client_class.is_dir(path)
+        if is_dir:
+            return path
+        else:
+            raise ValueError(f"Path '{path}' is not a directory on WebDAV server")
+
     def walk(self, path: str):
         items = self.client_class.list(path, get_info=True)
 
@@ -188,7 +199,7 @@ class WebdavTransport:
                     path=posixpath.join(path, file["name"]), initial_path=initial_path
                 )
             else:
-                relative_path = file["path"].replace(initial_path, "").lstrip("/")
+                relative_path = file["path"].replace(initial_path, "", count=1).lstrip("/")
                 if is_audio_file(relative_path):
                     yield relative_path
 
@@ -240,6 +251,18 @@ class LocalTransport:
     @staticmethod
     def get_parent_directory(path: str) -> str:
         return os.path.dirname(path)
+
+    def validate_path(self, path: str) -> str:
+        path = os.path.abspath(path)
+        if not os.path.exists(path):
+            raise ValueError(f"Path does not exist: {path}")
+        if not os.path.isdir(path):
+            raise ValueError(f"Path is not a directory: {path}")
+
+        # Resolve symlinks and check for path traversal
+        real_path = os.path.realpath(path)
+        return real_path
+
 
     def walk(self, path: str):
         return os.walk(path)

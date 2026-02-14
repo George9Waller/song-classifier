@@ -78,7 +78,6 @@ def cmd_process(args: argparse.Namespace) -> None:
             sys.exit(1)
 
     # Validate path
-    path = validate_path_or_exit(args.path or DEFAULT_PATH)
 
     skip_processed = not args.no_skip_processed
     skip_in_metadata = not args.no_skip_in_metadata
@@ -88,6 +87,7 @@ def cmd_process(args: argparse.Namespace) -> None:
         pull_metadata()
 
     file_transport = get_file_transport_for_args(args)
+    path = validate_path_or_exit(args.path or DEFAULT_PATH, file_transport=file_transport)
 
     # Collect files
     logger.info(f"Scanning {path}...")

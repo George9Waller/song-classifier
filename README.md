@@ -8,6 +8,9 @@ A CLI tool that auto-tags music files (DJ sets, live recordings) using AI to inf
 - **Interactive TUI** - Review and edit suggested metadata before applying
 - **Multiple audio formats** - Supports MP3, FLAC, M4A/MP4, OGG, Opus, WAV, AIFF
 - **WebDAV support** - Process files directly from a WebDAV server
+- **File sync** - Copy audio files between local directories or WebDAV servers, skipping existing files
+- **Organize** - Automatically move files into Artist/Album/ directory structure based on metadata
+- **Metadata sync** - Keep file tags and stored metadata in sync
 - **Git sync** - Automatically sync your metadata database with a git repository
 - **Skip processed files** - Tracks which files have been processed to avoid duplicates
 
@@ -102,7 +105,7 @@ song-classifier process /remote/path --webdav http://server/ --webdav-user USER
 
 ```
 song-classifier process [PATH] [OPTIONS]
-  Process audio files in a directory
+  Process audio files — AI-infer metadata from filenames, review in TUI, write tags
 
   Options:
     --webdav HOST           WebDAV host URL
@@ -112,8 +115,49 @@ song-classifier process [PATH] [OPTIONS]
     --no-skip-in-metadata   Process files even if already in metadata.csv
     --no-sync               Skip git sync
     --dry-run               Show what would be done without making changes
-    -V, --verbose           Enable verbose/debug output
     -y, --yes               Automatically accept AI metadata without a confirmation UI (use with caution)
+    -V, --verbose           Enable verbose/debug output
+
+song-classifier organize [PATH] [OPTIONS]
+  Move files into Artist/Album/ directories based on stored metadata
+
+  Options:
+    --webdav HOST           WebDAV host URL
+    --webdav-user USER      WebDAV username
+    --webdav-password PASS  WebDAV password
+    --dry-run               Show what would be done without making changes
+    -V, --verbose           Enable verbose output
+
+song-classifier sync [SOURCE_PATH] --dest DEST_PATH [OPTIONS]
+  Copy audio files from source to destination, skipping files that already exist.
+  Source and destination can each be local or WebDAV independently.
+
+  Source options (where to copy from):
+    --webdav HOST              WebDAV host URL for source
+    --webdav-user USER         WebDAV username for source
+    --webdav-password PASS     WebDAV password for source
+
+  Destination options (where to copy to):
+    --dest PATH                Destination directory (required)
+    --dest-webdav HOST         WebDAV host URL for destination
+    --dest-webdav-user USER    WebDAV username for destination
+    --dest-webdav-password PASS  WebDAV password for destination
+
+  Other options:
+    --dry-run               Show what would be done without making changes
+    -V, --verbose           Enable verbose output
+
+song-classifier sync-metadata [PATH] [OPTIONS]
+  Sync stored metadata with file tags — updates file tags to match stored
+  metadata, or stores file tags if no stored metadata exists
+
+  Options:
+    --webdav HOST           WebDAV host URL
+    --webdav-user USER      WebDAV username
+    --webdav-password PASS  WebDAV password
+    --no-sync               Skip git sync
+    --dry-run               Show what would be done without making changes
+    -V, --verbose           Enable verbose output
 
 song-classifier config show
   Show current configuration
@@ -127,6 +171,25 @@ song-classifier config set-webdav --user USER --password PASS
 Global options:
   -v, --version           Show version and exit
   -h, --help              Show help message
+```
+
+### Sync examples
+
+```bash
+# Copy audio files from one local directory to another
+song-classifier sync ~/Music/sets --dest /mnt/usb/sets
+
+# Preview what would be copied
+song-classifier sync ~/Music/sets --dest /mnt/usb/sets --dry-run
+
+# Copy from WebDAV server to local directory
+song-classifier sync /remote/path --webdav http://server/ --dest ~/Music/sets
+
+# Copy from local directory to WebDAV server
+song-classifier sync ~/Music/sets --dest /remote/path --dest-webdav http://server/ --dest-webdav-user USER
+
+# Copy from one WebDAV server to another
+song-classifier sync /src/path --webdav http://src-server/ --dest /dest/path --dest-webdav http://dest-server/
 ```
 
 ### Git Sync

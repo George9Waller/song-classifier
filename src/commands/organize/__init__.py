@@ -69,8 +69,8 @@ def cmd_organize(args: argparse.Namespace) -> None:
     logger = get_logger()
 
     dry_run = args.dry_run
-    path = validate_path_or_exit(args.path or DEFAULT_PATH)
     file_transport = get_file_transport_for_args(args)
+    path = validate_path_or_exit(args.path or DEFAULT_PATH, file_transport=file_transport)
     pull_metadata()
 
     # Move files to /artist/album directories based on metadata

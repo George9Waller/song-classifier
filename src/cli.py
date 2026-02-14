@@ -9,6 +9,7 @@ from src.commands.config import (
 )
 from src.commands.organize import cmd_organize
 from src.commands.process import cmd_process
+from src.commands.sync import cmd_sync
 from src.commands.sync_metadata import cmd_sync_metadata
 from src.utils.git_sync import set_sync_repo
 from src.utils.logging import setup_logging
@@ -144,6 +145,44 @@ def main() -> None:
     )
     sync_parser.set_defaults(func=cmd_sync_metadata)
 
+    # Sync command (copy files from source to destination)
+    sync_files_parser = subparsers.add_parser(
+        "sync",
+        help="Sync audio files from source to destination (local or WebDAV)",
+    )
+    for name, arg in FILE_TRANSPORT_ARGUMENTS:
+        sync_files_parser.add_argument(name, **arg)
+    sync_files_parser.add_argument(
+        "--dest",
+        required=True,
+        metavar="PATH",
+        help="Destination directory (local path or WebDAV remote path)",
+    )
+    sync_files_parser.add_argument(
+        "--dest-webdav",
+        metavar="HOST",
+        help="WebDAV host URL for the destination",
+    )
+    sync_files_parser.add_argument(
+        "--dest-webdav-user",
+        metavar="USER",
+        help="WebDAV username for destination (or set WEBDAV_USERNAME env var)",
+    )
+    sync_files_parser.add_argument(
+        "--dest-webdav-password",
+        metavar="PASS",
+        help="WebDAV password for destination (or set WEBDAV_PASSWORD env var)",
+    )
+    sync_files_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+    sync_files_parser.add_argument(
+        "-V", "--verbose", action="store_true", help="Enable verbose output"
+    )
+    sync_files_parser.set_defaults(func=cmd_sync)
+
     # Config command group
     config_parser = subparsers.add_parser("config", help="Configuration management")
     config_subparsers = config_parser.add_subparsers(
@@ -227,6 +266,31 @@ def main() -> None:
             help="Sync stored metadata with file metadata tags (update file tags to match stored metadata or store file tags if no stored metadata)",
         )
         legacy_parser.add_argument(
+            "--sync",
+            action="store_true",
+            help="Sync audio files from source to destination",
+        )
+        legacy_parser.add_argument(
+            "--dest",
+            metavar="PATH",
+            help="Destination directory (used with --sync)",
+        )
+        legacy_parser.add_argument(
+            "--dest-webdav",
+            metavar="HOST",
+            help="WebDAV host URL for the destination (used with --sync)",
+        )
+        legacy_parser.add_argument(
+            "--dest-webdav-user",
+            metavar="USER",
+            help="WebDAV username for destination (used with --sync)",
+        )
+        legacy_parser.add_argument(
+            "--dest-webdav-password",
+            metavar="PASS",
+            help="WebDAV password for destination (used with --sync)",
+        )
+        legacy_parser.add_argument(
             "--dry-run",
             action="store_true",
             help="Show what would be done without making changes",
@@ -259,6 +323,10 @@ def main() -> None:
 
         if args.organize:
             cmd_organize(args)
+            return
+
+        if args.sync:
+            cmd_sync(args)
             return
 
         # Default to process command
