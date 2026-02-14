@@ -1,15 +1,16 @@
 """File transport abstraction for local and WebDAV file systems."""
 
 import argparse
-from multiprocessing.util import get_logger
 import os
+import pathlib
 import posixpath
 from enum import Enum
 from typing import Generator, Iterable, Optional
 
-from webdav3 import client
+from webdav3 import client, exceptions
 
 from src.constants import EXCLUDED_FILENAMES_FOR_EMPTY_DIRECTORY_DELETION
+from src.utils.logging import get_logger
 
 
 def get_file_transport_for_args(args: argparse.Namespace) -> "FileTransport":
@@ -199,7 +200,9 @@ class WebdavTransport:
                     path=posixpath.join(path, file["name"]), initial_path=initial_path
                 )
             else:
-                relative_path = file["path"].replace(initial_path, "", count=1).lstrip("/")
+                relative_path = (
+                    file["path"].replace(initial_path, "", count=1).lstrip("/")
+                )
                 if is_audio_file(relative_path):
                     yield relative_path
 
@@ -228,6 +231,96 @@ class WebdavTransport:
             local_path=local_path,
         )
         return remote_path
+
+    def mkdir_recursive(self, directory_path: str) -> None:
+        try:
+            directory_exists = self.client_class.is_dir(directory_path)
+        except exceptions.RemoteResourceNotFound:
+            directory_exists = False
+
+        if not directory_exists:
+            try:
+                directory_success = self.client_class.mkdir(directory_path)
+            except exceptions.RemoteParentNotFound:
+                path = pathlib.Path(directory_path)
+                path_and_parents = list(reversed(path.parents)) + [path]
+                parent_path_results = [
+                    self.mkdir_recursive(parent.as_posix())
+                    for parent in path_and_parents
+                ]
+                return parent_path_results[-1]
+
+            if not directory_success:
+                logger = get_logger()
+                logger.warning(
+                    f"Failed to create directory '{directory_path}' on WebDAV server."
+                )
+                return False
+        return True
+
+    def move_file(
+        self, original_path: str, new_path: str, initial_path: Optional[str] = None
+    ) -> None:
+        """Move file to new location on WebDAV server."""
+        # Use posixpath for remote path construction
+        original_full_path = posixpath.join(initial_path or "", original_path)
+        new_full_path = posixpath.join(initial_path or "", new_path)
+
+        # Ensure destination directory exists
+        dest_dir = posixpath.dirname(new_full_path)
+        self.mkdir_recursive(dest_dir)
+
+        self.client_class.move(
+            remote_path_from=original_full_path, remote_path_to=new_full_path
+        )
+
+    def walk(self, path: str, initial_path: Optional[str] = None):
+        """Walk through files in the given path on WebDAV server."""
+        # Use posixpath for remote path construction
+        full_path = posixpath.join(initial_path or "", path)
+
+        # Get all nested filed and directories under the given path
+        items = self.client_class.list(full_path, get_info=True)
+
+        dirs = []
+        files = []
+        for item in items:
+            if item["isdir"]:
+                dirs.append(item["name"])
+            else:
+                files.append(item["name"])
+
+        yield full_path, dirs, files
+
+        for dir in dirs:
+            yield from self.walk(
+                path=posixpath.join(path, dir), initial_path=initial_path
+            )
+
+    def delete_directory_if_exists(self, path: str) -> None:
+        """Delete directory if it exists (used for cleanup of empty directories)."""
+        logger = get_logger()
+
+        full_path = posixpath.join(path)
+        try:
+            if self.client_class.is_dir(full_path):
+                # Delete excluded files if they exist
+                for filename in EXCLUDED_FILENAMES_FOR_EMPTY_DIRECTORY_DELETION:
+                    excluded_file_path = posixpath.join(full_path, filename)
+                    try:
+                        self.client_class.clean(excluded_file_path)
+                    except (
+                        exceptions.RemoteResourceNotFound,
+                        exceptions.ResponseErrorCode,
+                    ):
+                        pass  # File doesn't exist, ignore
+
+                self.client_class.clean(full_path)
+        except exceptions.RemoteResourceNotFound:
+            pass  # Directory doesn't exist, ignore
+        except exceptions.WebDavException as e:
+            print(type(e), e)
+            logger.warning(f"Failed to delete directory '{path}' on WebDAV server: {e}")
 
     def cleanup_local_file_if_needed(self, local_path: str) -> None:
         """Delete local file if cleanup is enabled for this transport."""
@@ -262,7 +355,6 @@ class LocalTransport:
         # Resolve symlinks and check for path traversal
         real_path = os.path.realpath(path)
         return real_path
-
 
     def walk(self, path: str):
         return os.walk(path)
