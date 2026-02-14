@@ -7,6 +7,7 @@ import posixpath
 from enum import Enum
 from typing import Generator, Iterable, Optional
 
+from requests.adapters import HTTPAdapter
 from webdav3 import client, exceptions
 
 from src.constants import EXCLUDED_FILENAMES_FOR_EMPTY_DIRECTORY_DELETION
@@ -127,6 +128,14 @@ class FileTransport:
         raise NotImplementedError
 
 
+class WebdavClient(client.Client):
+    http_adapter = HTTPAdapter(max_retries=3)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.session.mount("http://", self.http_adapter)
+
+
 class WebdavTransport:
     """WebDAV file transport implementation."""
 
@@ -157,7 +166,7 @@ class WebdavTransport:
             username = username or config_user
             password = password or config_pass
 
-        self.client_class = client.Client(
+        self.client_class = WebdavClient(
             {
                 "webdav_hostname": webdav_host,
                 "webdav_login": username,
@@ -270,9 +279,28 @@ class WebdavTransport:
         dest_dir = posixpath.dirname(new_full_path)
         self.mkdir_recursive(dest_dir)
 
-        self.client_class.move(
-            remote_path_from=original_full_path, remote_path_to=new_full_path
-        )
+        try:
+            self.client_class.move(
+                remote_path_from=original_full_path, remote_path_to=new_full_path
+            )
+        except exceptions.ResponseErrorCode as e:
+            if "target file exists" in e.message.decode("utf-8").lower():
+                pass  # Ignore if target file already exists
+            else:
+                raise
+
+        try:
+            self.client_class.clean(
+                original_full_path
+            )  # Ensure original file is removed after move
+        except exceptions.ResponseErrorCode as e:
+            if "file not found on disk" in e.message.decode("utf-8").lower():
+                pass  # Ignore if original file is already removed
+            else:
+                logger = get_logger()
+                logger.warning(
+                    f"Failed to clean original file '{original_full_path}' on WebDAV server: {e}"
+                )
 
     def walk(self, path: str, initial_path: Optional[str] = None):
         """Walk through files in the given path on WebDAV server."""
@@ -280,7 +308,10 @@ class WebdavTransport:
         full_path = posixpath.join(initial_path or "", path)
 
         # Get all nested filed and directories under the given path
-        items = self.client_class.list(full_path, get_info=True)
+        try:
+            items = self.client_class.list(full_path, get_info=True)
+        except exceptions.RemoteResourceNotFound:
+            return
 
         dirs = []
         files = []
@@ -319,7 +350,6 @@ class WebdavTransport:
         except exceptions.RemoteResourceNotFound:
             pass  # Directory doesn't exist, ignore
         except exceptions.WebDavException as e:
-            print(type(e), e)
             logger.warning(f"Failed to delete directory '{path}' on WebDAV server: {e}")
 
     def cleanup_local_file_if_needed(self, local_path: str) -> None:

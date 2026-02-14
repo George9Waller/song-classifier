@@ -70,14 +70,21 @@ def cmd_organize(args: argparse.Namespace) -> None:
 
     dry_run = args.dry_run
     file_transport = get_file_transport_for_args(args)
-    path = validate_path_or_exit(args.path or DEFAULT_PATH, file_transport=file_transport)
+    path = validate_path_or_exit(
+        args.path or DEFAULT_PATH, file_transport=file_transport
+    )
     pull_metadata()
+
+    # Collect files
+    logger.info(f"Scanning {path}...")
+    files = list(file_transport.list_files(path))
+    logger.info(f"Found {len(files)} audio files")
 
     # Move files to /artist/album directories based on metadata
     with Progress(*PROGRESS_COLUMNS) as progress:
-        task = progress.add_task("Organizing files...", filename="")
+        task = progress.add_task("Organizing files...", total=len(files), filename="")
 
-        for filename in file_transport.list_files(path):
+        for filename in files:
             progress.update(task, filename=filename, refresh=True)
 
             new_path = get_new_path_for_file(filename, file_transport=file_transport)
