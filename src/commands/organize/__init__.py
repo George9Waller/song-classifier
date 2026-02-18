@@ -3,12 +3,12 @@ import argparse
 from rich.progress import Progress
 
 from src.data import get_file_metadata
-from src.constants import DEFAULT_PATH, EXCLUDED_FILENAMES_FOR_EMPTY_DIRECTORY_DELETION
-from src.utils.file_transport import FileTransport, get_file_transport_for_args
+from src.constants import EXCLUDED_FILENAMES_FOR_EMPTY_DIRECTORY_DELETION
+from src.utils.file_transport import FileTransport
 from src.utils.logging import get_logger, setup_logging
-from src.utils.path import validate_path_or_exit
 from src.utils.progress import PROGRESS_COLUMNS
-from src.utils.git_sync import pull_metadata
+from src.utils.git_sync import sync_metadata
+from src.utils.validate import validate_path
 
 
 def get_new_path_for_file(filename: str, file_transport: FileTransport) -> str:
@@ -59,7 +59,9 @@ def clear_empty_directories(path: str, file_transport: FileTransport) -> None:
             clear_empty_directories(parent, file_transport)
 
 
-def cmd_organize(args: argparse.Namespace) -> None:
+@validate_path
+@sync_metadata
+def cmd_organize(args: argparse.Namespace, *, path, file_transport) -> None:
     """
     Handle the 'organize' command.
 
@@ -69,11 +71,6 @@ def cmd_organize(args: argparse.Namespace) -> None:
     logger = get_logger()
 
     dry_run = args.dry_run
-    file_transport = get_file_transport_for_args(args)
-    path = validate_path_or_exit(
-        args.path or DEFAULT_PATH, file_transport=file_transport
-    )
-    pull_metadata()
 
     # Collect files
     logger.info(f"Scanning {path}...")

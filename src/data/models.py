@@ -53,3 +53,14 @@ class TrackMetadata:
             genre=row["genre"],
             date=row["date"] or None,
         )
+
+
+@dataclass
+class YouTubePlaylistConfig:
+    """Configuration for a YouTube playlist for the yt-dlp command."""
+
+    name: str
+    url: str
+    id: str
+    current_index: int = 0
+    total: int = 0

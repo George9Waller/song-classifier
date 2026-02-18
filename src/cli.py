@@ -11,6 +11,12 @@ from src.commands.organize import cmd_organize
 from src.commands.process import cmd_process
 from src.commands.sync import cmd_sync
 from src.commands.sync_metadata import cmd_sync_metadata
+from src.commands.yt_dlp import (
+    cmd_yt_dlp_add,
+    cmd_yt_dlp_download,
+    cmd_yt_dlp_show,
+    cmd_yt_dlp_remove,
+)
 from src.utils.git_sync import set_sync_repo
 from src.utils.logging import setup_logging
 
@@ -211,6 +217,79 @@ def main() -> None:
     config_webdav_parser.add_argument("--user", help="WebDAV username")
     config_webdav_parser.add_argument("--password", help="WebDAV password")
     config_webdav_parser.set_defaults(func=cmd_config_set_webdav)
+
+    # yt-dlp
+    yt_dlp_parser = subparsers.add_parser(
+        "yt-dlp", help="yt-dlp wrapper commands for managing YouTube playlist syncing"
+    )
+    yt_dlp_subparsers = yt_dlp_parser.add_subparsers(
+        dest="yt_dlp_command", help="yt-dlp commands"
+    )
+
+    # yt-dlp add
+    yt_dlp_add_parser = yt_dlp_subparsers.add_parser(
+        "add", help="Add a new YouTube playlist for syncing"
+    )
+    yt_dlp_add_parser.add_argument(
+        "id", help="YouTube playlist ID (the part after 'list=')"
+    )
+    yt_dlp_add_parser.add_argument(
+        "--no-sync",
+        action="store_true",
+        help="Skip git sync even if a repository is configured",
+    )
+    yt_dlp_add_parser.add_argument(
+        "-V", "--verbose", action="store_true", help="Enable verbose output"
+    )
+    yt_dlp_add_parser.set_defaults(func=cmd_yt_dlp_add)
+
+    # yt-dlp show
+    yt_dlp_show_parser = yt_dlp_subparsers.add_parser(
+        "show", help="Show configured YouTube playlists"
+    )
+    yt_dlp_show_parser.add_argument(
+        "-V", "--verbose", action="store_true", help="Enable verbose output"
+    )
+    yt_dlp_show_parser.set_defaults(func=cmd_yt_dlp_show)
+
+    # yt-dlp remove
+    yt_dlp_remove_parser = yt_dlp_subparsers.add_parser(
+        "remove", help="Remove a YouTube playlist from config by name"
+    )
+    yt_dlp_remove_parser.add_argument(
+        "name", help="Name of the YouTube playlist to remove"
+    )
+    yt_dlp_remove_parser.add_argument(
+        "--no-sync",
+        action="store_true",
+        help="Skip git sync even if a repository is configured",
+    )
+    yt_dlp_remove_parser.add_argument(
+        "-V", "--verbose", action="store_true", help="Enable verbose output"
+    )
+    yt_dlp_remove_parser.set_defaults(func=cmd_yt_dlp_remove)
+
+    # yt-dlp download
+    yt_dlp_download_parser = yt_dlp_subparsers.add_parser(
+        "download", help="Download a YouTube playlist by name"
+    )
+    yt_dlp_download_parser.add_argument(
+        "name", help="Name of the YouTube playlist to download"
+    )
+    yt_dlp_download_parser.add_argument(
+        "--start-index",
+        type=int,
+        help="Start downloading from the specified index (0-based, default is current index for the playlist)",
+    )
+    yt_dlp_download_parser.add_argument(
+        "--no-sync",
+        action="store_true",
+        help="Skip git sync even if a repository is configured",
+    )
+    yt_dlp_download_parser.add_argument(
+        "-V", "--verbose", action="store_true", help="Enable verbose output"
+    )
+    yt_dlp_download_parser.set_defaults(func=cmd_yt_dlp_download)
 
     args = parser.parse_args()
 

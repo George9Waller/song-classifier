@@ -1,6 +1,5 @@
 """Core classification orchestration for song-classifier."""
 
-import os
 from typing import Optional, Union
 
 from src.data import get_file_metadata, upsert_album_metadata, upsert_track_metadata

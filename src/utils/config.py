@@ -30,6 +30,11 @@ def get_or_create_albums_file_path() -> Path:
     return get_or_create_config_dir() / "albums.csv"
 
 
+def get_or_create_playlists_file_path() -> Path:
+    """Get path to the playlists JSON file."""
+    return get_or_create_config_dir() / "playlists.json"
+
+
 def get_or_create_temp_dir() -> Path:
     """Get or create the temp directory for WebDAV downloads."""
     temp_dir = get_or_create_config_dir() / "temp"

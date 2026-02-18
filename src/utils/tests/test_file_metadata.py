@@ -4,14 +4,22 @@ from datetime import datetime
 import pytest
 
 from src.data.models import AlbumMetadata, TrackMetadata
-from src.utils.file_metadata import read_file_metadata, write_file_metadata, is_already_processed
+from src.utils.file_metadata import (
+    read_file_metadata,
+    write_file_metadata,
+    is_already_processed,
+)
 
 
 def _get_sample_file_path(extension: str, *, name: str = "sample") -> str:
-    original_path = os.path.join(os.path.dirname(__file__), "test_data", f"{name}.{extension}")
+    original_path = os.path.join(
+        os.path.dirname(__file__), "test_data", f"{name}.{extension}"
+    )
 
     now = datetime.now().timestamp()
-    temp_path = os.path.join(os.path.dirname(__file__), "test_data", f"{name}_{now}.{extension}")
+    temp_path = os.path.join(
+        os.path.dirname(__file__), "test_data", f"{name}_{now}.{extension}"
+    )
 
     with open(original_path, "rb") as src, open(temp_path, "wb") as dst:
         dst.write(src.read())
@@ -77,6 +85,7 @@ def sample_opus_file():
 
     _teardown_sample_file(temp_path)
 
+
 @pytest.fixture
 def sample_ogg_opus_file():
     temp_path = _get_sample_file_path("ogg", name="opus")
@@ -120,6 +129,7 @@ def track_metadata():
         genre="Genre",
         date="2026-02-09",
     )
+
 
 @pytest.mark.parametrize("sample_file_fixture_name", ALL_FILE_FIXTURES)
 def test_file_metadata(request, sample_file_fixture_name, track_metadata):

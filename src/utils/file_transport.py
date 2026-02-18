@@ -189,12 +189,6 @@ class WebdavTransport:
         else:
             raise ValueError(f"Path '{path}' is not a directory on WebDAV server")
 
-    def walk(self, path: str):
-        items = self.client_class.list(path, get_info=True)
-
-        # TODO: implement walk parsing
-        raise NotImplementedError("walk method not implemented for WebdavTransport")
-
     def list_files(
         self, path: str, initial_path: Optional[str] = None
     ) -> Generator[str, None, None]:

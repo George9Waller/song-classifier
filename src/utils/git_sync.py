@@ -3,10 +3,12 @@
 This module handles syncing metadata.csv and albums.csv with a remote git repository.
 """
 
+import argparse
 import shutil
 import subprocess
+import sys
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from filelock import FileLock
 
@@ -16,6 +18,8 @@ from src.utils.config import (
     save_config,
 )
 from src.utils.logging import get_logger
+
+METADATA_FILE_NAMES = ["metadata.csv", "albums.csv", "playlists.json"]
 
 
 def get_git_repo_dir() -> Path:
@@ -124,8 +128,8 @@ def pull_metadata() -> bool:
             # Try to continue anyway - might be a fresh repo with no remote commits
 
         # Copy files from repo to config dir
-        _sync_file_from_repo("metadata.csv", repo_dir)
-        _sync_file_from_repo("albums.csv", repo_dir)
+        for filename in METADATA_FILE_NAMES:
+            _sync_file_from_repo(filename, repo_dir)
 
         logger.info("Metadata synced from repository")
         return True
@@ -145,8 +149,8 @@ def push_metadata() -> bool:
         repo_dir = _ensure_repo_cloned(repo_url)
 
         # Copy files from config dir to repo
-        _sync_file_to_repo("metadata.csv", repo_dir)
-        _sync_file_to_repo("albums.csv", repo_dir)
+        for filename in METADATA_FILE_NAMES:
+            _sync_file_to_repo(filename, repo_dir)
 
         # Check if there are changes
         result = _run_git(["status", "--porcelain"], cwd=repo_dir)
@@ -156,7 +160,7 @@ def push_metadata() -> bool:
 
         # Add, commit, and push
         logger.info("Pushing metadata changes...")
-        _run_git(["add", "metadata.csv", "albums.csv"], cwd=repo_dir)
+        _run_git(["add"] + METADATA_FILE_NAMES, cwd=repo_dir)
 
         result = _run_git(
             ["commit", "-m", "Update metadata from song-classifier"],
@@ -177,3 +181,32 @@ def push_metadata() -> bool:
 
         logger.info("Metadata pushed to repository")
         return True
+
+
+def sync_metadata(func: Callable) -> Callable:
+    """Decorator to sync metadata before and after a function."""
+
+    def wrapper(args: argparse.Namespace, *other_args, **kwargs):
+        sync = not getattr(args, "no_sync", False)
+
+        if sync:
+            pull_metadata()
+
+        try:
+            result = func(args, *other_args, **kwargs)
+        except KeyboardInterrupt:
+            logger = get_logger()
+            logger.warning("Interrupted by user")
+
+            # Still try to push any changes made before interrupt
+            if sync:
+                push_metadata()
+
+            sys.exit(130)
+
+        if sync:
+            push_metadata()
+
+        return result
+
+    return wrapper

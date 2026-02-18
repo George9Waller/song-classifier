@@ -1,22 +1,15 @@
 import argparse
 import asyncio
-import sys
 from typing import Union
 
 from rich.progress import Progress
 
-from src.constants import DEFAULT_PATH
 from src.scripts import classify_filename
-from src.utils.ai_metadata import MissingAPIKeyError, validate_api_key
-from src.utils.file_transport import (
-    LocalTransport,
-    WebdavTransport,
-    get_file_transport_for_args,
-)
-from src.utils.git_sync import pull_metadata, push_metadata
+from src.utils.file_transport import LocalTransport, WebdavTransport
+from src.utils.git_sync import sync_metadata
 from src.utils.logging import setup_logging
-from src.utils.path import validate_path_or_exit
 from src.utils.progress import PROGRESS_COLUMNS
+from src.utils.validate import has_openai_api_key_set, validate_path
 
 
 async def process_files(
@@ -65,29 +58,15 @@ async def process_files(
     return processed
 
 
-def cmd_process(args: argparse.Namespace) -> None:
+@has_openai_api_key_set
+@validate_path
+@sync_metadata
+def cmd_process(args: argparse.Namespace, *, path, file_transport) -> None:
     """Handle the 'process' subcommand."""
     logger = setup_logging(verbose=args.verbose)
 
-    # Validate API key early
-    if not args.dry_run:
-        try:
-            validate_api_key()
-        except MissingAPIKeyError as e:
-            logger.error(str(e))
-            sys.exit(1)
-
-    # Validate path
-
     skip_processed = not args.no_skip_processed
     skip_in_metadata = not args.no_skip_in_metadata
-
-    # Pull metadata from git if configured
-    if not args.no_sync:
-        pull_metadata()
-
-    file_transport = get_file_transport_for_args(args)
-    path = validate_path_or_exit(args.path or DEFAULT_PATH, file_transport=file_transport)
 
     # Collect files
     logger.info(f"Scanning {path}...")
@@ -100,27 +79,16 @@ def cmd_process(args: argparse.Namespace) -> None:
 
     files_processed = 0
 
-    try:
-        files_processed = asyncio.run(
-            process_files(
-                files,
-                path,
-                file_transport,
-                skip_processed,
-                skip_in_metadata,
-                args.dry_run,
-                auto_accept_metadata=args.yes,
-            )
+    files_processed = asyncio.run(
+        process_files(
+            files,
+            path,
+            file_transport,
+            skip_processed,
+            skip_in_metadata,
+            args.dry_run,
+            auto_accept_metadata=args.yes,
         )
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        # Still try to push any changes made before interrupt
-        if not args.no_sync and files_processed > 0:
-            push_metadata()
-        sys.exit(130)
+    )
 
     logger.info(f"Processed {files_processed} files")
-
-    # Push metadata to git if configured
-    if not args.no_sync and not args.dry_run:
-        push_metadata()

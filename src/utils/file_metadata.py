@@ -460,7 +460,7 @@ def _write_ogg_opus(path: str, meta: TrackMetadata) -> None:
 
     try:
         audio.add_tags()
-    except MutagenError as e:
+    except MutagenError:
         pass
 
     with open(path, "rb+") as fileobj:

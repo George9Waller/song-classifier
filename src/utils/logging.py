@@ -1,7 +1,6 @@
 """Logging configuration for song-classifier."""
 
 import logging
-import sys
 from typing import Optional
 
 from rich.logging import RichHandler

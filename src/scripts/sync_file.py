@@ -60,6 +60,9 @@ def sync_file(
     initial_path: str,
     dry_run: Optional[bool] = False,
 ) -> None:
+    def cleanup(loaded_file: str) -> None:
+        file_transport.cleanup_local_file_if_needed(loaded_file)
+
     logger = get_logger()
 
     file_basename = file_transport.get_basename_from_path(filename)
@@ -67,7 +70,6 @@ def sync_file(
     stored_metadata = get_file_metadata(key=file_basename)
 
     loaded_file = file_transport.load_file(filename, initial_path)
-    cleanup = lambda: file_transport.cleanup_local_file_if_needed(loaded_file)
 
     file_metadata = read_file_metadata(loaded_file)
     if file_metadata is not None:

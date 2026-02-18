@@ -98,7 +98,9 @@ def cmd_sync(args: argparse.Namespace) -> None:
     # Source transport and path
     source_transport = get_file_transport_for_args(args)
     if isinstance(source_transport, LocalTransport):
-        source_path = validate_path_or_exit(args.path or DEFAULT_PATH, file_transport=source_transport)
+        source_path = validate_path_or_exit(
+            args.path or DEFAULT_PATH, file_transport=source_transport
+        )
     else:
         source_path = args.path or DEFAULT_PATH
 

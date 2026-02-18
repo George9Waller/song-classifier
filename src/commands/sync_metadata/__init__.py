@@ -5,13 +5,12 @@ from multiprocessing.dummy import Pool
 
 from rich.progress import Progress, TaskID
 
-from src.constants import DEFAULT_PATH
 from src.scripts.sync_file import sync_file
-from src.utils.file_transport import FileTransport, get_file_transport_for_args
+from src.utils.file_transport import FileTransport
 from src.utils.logging import setup_logging, get_logger
-from src.utils.git_sync import pull_metadata, push_metadata
-from src.utils.path import validate_path_or_exit
+from src.utils.git_sync import sync_metadata
 from src.utils.progress import PROGRESS_COLUMNS
+from src.utils.validate import validate_path
 
 
 def sync_file_and_update_progress(
@@ -34,7 +33,9 @@ def sync_file_and_update_progress(
     progress.advance(progress_task_id)
 
 
-def cmd_sync_metadata(args: argparse.Namespace) -> None:
+@validate_path
+@sync_metadata
+def cmd_sync_metadata(args: argparse.Namespace, *, path, file_transport) -> None:
     """
     Handle the 'sync-metadata' command.
 
@@ -46,17 +47,7 @@ def cmd_sync_metadata(args: argparse.Namespace) -> None:
     setup_logging(verbose=args.verbose)
     logger = get_logger()
 
-    sync = not args.no_sync
     dry_run = args.dry_run
-
-    file_transport = get_file_transport_for_args(args)
-    path = validate_path_or_exit(
-        args.path or DEFAULT_PATH, file_transport=file_transport
-    )
-
-    # Pull metadata from git if configured
-    if sync:
-        pull_metadata()
 
     logger.info(
         f"Syncing metadata for files in {path} using {file_transport.__class__.__name__}"
@@ -81,6 +72,3 @@ def cmd_sync_metadata(args: argparse.Namespace) -> None:
         )
         pool.close()
         pool.join()
-
-    if sync and not dry_run:
-        push_metadata()
