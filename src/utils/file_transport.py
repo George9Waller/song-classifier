@@ -229,6 +229,11 @@ class WebdavTransport:
 
         # Use posixpath for remote path construction
         remote_path = posixpath.join(remote_base_path, relative_path)
+
+        # Make directory if needed
+        remote_dir = posixpath.dirname(remote_path)
+        self.mkdir_recursive(remote_dir)
+
         self.client_class.upload_sync(
             remote_path=remote_path,
             local_path=local_path,

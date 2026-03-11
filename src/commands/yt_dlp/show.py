@@ -30,7 +30,7 @@ def cmd_yt_dlp_show(args: argparse.Namespace) -> None:
 
     for playlist in playlists:
         md = Markdown(
-            f"URL: {playlist.url}\n\nDownloaded: {playlist.current_index}/{playlist.total}\n"
+            f"URL: {playlist.url}\n\nDownloaded: {playlist.current_index + 1}/{playlist.total}\n"
         )
         print(
             Panel(

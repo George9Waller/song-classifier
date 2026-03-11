@@ -7,6 +7,7 @@ from src.commands.config import (
     cmd_config_set_webdav,
     cmd_config_set_sync_repo,
 )
+from src.commands.editor import cmd_editor
 from src.commands.organize import cmd_organize
 from src.commands.process import cmd_process
 from src.commands.sync import cmd_sync
@@ -290,6 +291,15 @@ def main() -> None:
         "-V", "--verbose", action="store_true", help="Enable verbose output"
     )
     yt_dlp_download_parser.set_defaults(func=cmd_yt_dlp_download)
+
+    # editor
+    editor_parser = subparsers.add_parser(
+        "editor", help="Open the interactive editor for managing metadata"
+    )
+    editor_parser.add_argument(
+        "-V", "--verbose", action="store_true", help="Enable verbose output"
+    )
+    editor_parser.set_defaults(func=cmd_editor)
 
     args = parser.parse_args()
 

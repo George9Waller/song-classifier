@@ -33,6 +33,11 @@ def diff_metadata(
         else:
             stored_value = getattr(stored, attr, None)
             file_value = getattr(file, attr, None)
+
+            # Handle None vs empty string as equivalent for file metadata
+            if file_value in {None, ""} and stored_value in {None, ""}:
+                continue
+
             if stored_value != file_value:
                 diffs.append((attr, {"stored": stored_value, "file": file_value}))
     return diffs
@@ -79,7 +84,7 @@ def sync_file(
 
     if not diffs:
         logger.debug(f"Metadata for {filename} is already up to date, skipping.")
-        cleanup()
+        cleanup(loaded_file)
         return
 
     if stored_metadata is not None:
@@ -92,7 +97,7 @@ def sync_file(
             logger.info(f"Updating metadata for {filename} to match stored metadata.")
             write_file_metadata(loaded_file, stored_metadata)
             file_transport.save_file(loaded_file, initial_path, filename)
-        cleanup()
+        cleanup(loaded_file)
         return
 
     if file_metadata is not None:
@@ -103,4 +108,4 @@ def sync_file(
             upsert_album_metadata(file_metadata.album)
             upsert_track_metadata(file_metadata)
 
-    cleanup()
+    cleanup(loaded_file)
