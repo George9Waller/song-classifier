@@ -20,10 +20,10 @@ def environment_variables(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture(autouse=True)
 def mock_openai_client(mock_openai_response: dict) -> Generator[AsyncMock, None, None]:
     """Mock the OpenAI client for all tests."""
-    
+
     with patch("src.utils.ai_metadata.AsyncOpenAI") as MockClient:
         mock_client = AsyncMock()
-        
+
         # Configure the mock to return proper response structure
         mock_completion = MagicMock()
         mock_choice = MagicMock()
@@ -31,7 +31,7 @@ def mock_openai_client(mock_openai_response: dict) -> Generator[AsyncMock, None,
         mock_message.content = json.dumps(mock_openai_response)
         mock_choice.message = mock_message
         mock_completion.choices = [mock_choice]
-        
+
         mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
         MockClient.return_value = mock_client
         yield mock_client

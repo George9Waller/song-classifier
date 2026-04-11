@@ -37,7 +37,9 @@ class TestClassifyFilename:
 
         transport = LocalTransport()
 
-        with patch("src.scripts.classify_filename.parse_metadata_with_ai") as mock_parse:
+        with patch(
+            "src.scripts.classify_filename.parse_metadata_with_ai"
+        ) as mock_parse:
             mock_parse.return_value = TrackMetadata(
                 key="test_song.mp3",
                 track="Test Song",
@@ -117,7 +119,9 @@ class TestEndToEndFlow:
         assert len(files) == 2
 
         # Process with mocked AI
-        with patch("src.scripts.classify_filename.parse_metadata_with_ai") as mock_parse:
+        with patch(
+            "src.scripts.classify_filename.parse_metadata_with_ai"
+        ) as mock_parse:
             mock_parse.return_value = TrackMetadata(
                 key="song1.mp3",
                 track="Song One",
