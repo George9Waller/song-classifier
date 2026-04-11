@@ -17,6 +17,10 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --all-extras --dev
 
-      - name: Lint with ruff (or your linter)
+      - name: Ruff
         run: |
           uv run ruff check .
+
+      - name: Black
+        run: |
+          uv run black --check .

@@ -41,7 +41,9 @@ class TestPromptBuilding:
         assert "artist" in prompt
         assert "album" in prompt
 
-    def test_build_prompt_with_existing(self, sample_track: TrackMetadata, config_dir) -> None:
+    def test_build_prompt_with_existing(
+        self, sample_track: TrackMetadata, config_dir
+    ) -> None:
         """Test prompt building with existing metadata."""
         prompt = _build_prompt("test.mp3", sample_track)
         assert "Existing tags" in prompt

@@ -7,7 +7,7 @@ import pytest
 
 from src.data import clear_cache, get_file_metadata, upsert_track_metadata
 from src.data.models import AlbumMetadata, TrackMetadata
-from src.main import classify_filename
+from src.scripts import classify_filename
 from src.utils.file_transport import LocalTransport
 
 
@@ -37,7 +37,9 @@ class TestClassifyFilename:
 
         transport = LocalTransport()
 
-        with patch("src.main.parse_metadata_with_ai") as mock_parse:
+        with patch(
+            "src.scripts.classify_filename.parse_metadata_with_ai"
+        ) as mock_parse:
             mock_parse.return_value = TrackMetadata(
                 key="test_song.mp3",
                 track="Test Song",
@@ -117,7 +119,9 @@ class TestEndToEndFlow:
         assert len(files) == 2
 
         # Process with mocked AI
-        with patch("src.main.parse_metadata_with_ai") as mock_parse:
+        with patch(
+            "src.scripts.classify_filename.parse_metadata_with_ai"
+        ) as mock_parse:
             mock_parse.return_value = TrackMetadata(
                 key="song1.mp3",
                 track="Song One",

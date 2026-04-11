@@ -18,6 +18,9 @@ uv run -m src.cli [COMMAND] [OPTIONS]
 # Run tests
 uv run pytest tests/ -v
 
+# Linting
+uv run ruff check .
+
 # Environment
 export OPENAI_API_KEY=your_key_here
 ```
@@ -29,16 +32,36 @@ song-classifier/
 ├── src/
 │   ├── __init__.py
 │   ├── cli.py              # CLI entry point (argparse with subcommands)
-│   ├── main.py             # Core async classify_filename() orchestration
+│   ├── constants.py         # Shared constants (DEFAULT_PATH, etc.)
+│   ├── commands/
+│   │   ├── __init__.py
+│   │   ├── config/
+│   │   │   ├── __init__.py       # Exports cmd_config_show, cmd_config_set_webdav, cmd_config_set_sync_repo
+│   │   │   ├── show.py           # config show command
+│   │   │   ├── set_sync_repo.py  # config set-sync-repo command
+│   │   │   └── set_webdav.py     # config set-webdav command
+│   │   ├── organize/
+│   │   │   └── __init__.py       # cmd_organize - move files into Artist/Album/ directories
+│   │   ├── process/
+│   │   │   └── __init__.py       # cmd_process - AI metadata inference pipeline
+│   │   ├── sync/
+│   │   │   └── __init__.py       # cmd_sync - copy audio files between locations
+│   │   └── sync_metadata/
+│   │       └── __init__.py       # cmd_sync_metadata - sync file tags with stored metadata
 │   ├── data/
 │   │   ├── __init__.py     # CSV read/write, get/upsert functions
 │   │   └── models.py       # TrackMetadata, AlbumMetadata dataclasses
+│   ├── scripts/
+│   │   ├── __init__.py
+│   │   └── classify_filename.py  # Standalone script for classifying a single filename
 │   └── utils/
 │       ├── __init__.py
-│       ├── config.py       # XDG config paths, WebDAV credentials
-│       ├── constants.py    # Magic strings (PROCESSED_MARKER, etc.)
-│       ├── logging.py      # Logging configuration
-│       ├── git_sync.py     # Git repository sync with file locking
+│       ├── config.py          # XDG config paths, WebDAV credentials
+│       ├── constants.py       # Magic strings (PROCESSED_MARKER, etc.)
+│       ├── logging.py         # Logging configuration
+│       ├── path.py            # Path validation utilities
+│       ├── progress.py        # Rich progress bar configuration
+│       ├── git_sync.py        # Git repository sync with file locking
 │       ├── file_transport.py  # LocalTransport, WebdavTransport
 │       ├── file_metadata.py   # Mutagen read/write for audio formats
 │       ├── ai_metadata.py     # Async OpenAI prompt building and parsing
@@ -63,7 +86,9 @@ CLI tool that auto-tags music files using OpenAI to infer metadata from filename
 ### Data Flow
 
 ```
-cli.py orchestrates (async):
+cli.py dispatches to command handlers:
+
+process command (async):
   git_sync.pull_metadata()   → sync from remote git repo (if configured)
   FileTransport.list_files() → iterate audio files (filtered by extension)
 
@@ -77,6 +102,24 @@ cli.py orchestrates (async):
     FileTransport.save_file()  → upload if WebDAV
 
   git_sync.push_metadata()   → commit and push changes (if configured)
+
+organize command:
+  FileTransport.list_files() → iterate audio files
+  For each file: look up stored metadata → move to Artist/Album/ directory
+  Clean up empty directories
+
+sync command:
+  source_transport.list_files() → iterate audio files at source
+  dest_transport.list_files()   → collect existing files at destination (for skip check)
+  For each source file not at destination:
+    source_transport.load_file() → get local copy
+    Copy to destination (shutil.copy2 for local, dest_transport.save_file for WebDAV)
+
+sync-metadata command:
+  git_sync.pull_metadata()     → sync from remote git repo (if configured)
+  FileTransport.list_files()   → iterate audio files
+  For each file: compare stored metadata ↔ file tags → update whichever is missing
+  git_sync.push_metadata()     → commit and push changes (if configured)
 ```
 
 ### Key Abstractions
@@ -115,19 +158,57 @@ MP3, FLAC, M4A/MP4, OGG, Opus, WAV, AIFF - defined in `AUDIO_EXTENSIONS` in `fil
 
 ```
 song-classifier process [PATH] [OPTIONS]
+  Process audio files — AI-infer metadata from filenames, review in TUI, write tags
 
-Arguments:
-  PATH                    Directory to scan (default: current directory)
+  Options:
+    --webdav HOST           WebDAV host URL
+    --webdav-user USER      WebDAV username (or WEBDAV_USERNAME env var)
+    --webdav-password PASS  WebDAV password (or WEBDAV_PASSWORD env var)
+    --no-skip-processed     Process already-processed files
+    --no-skip-in-metadata   Process files already in metadata.csv
+    --no-sync               Skip git sync
+    --dry-run               Show what would be done without making changes
+    -y, --yes               Auto-accept AI metadata without confirmation UI
+    -V, --verbose           Enable verbose output
 
-Options:
-  --webdav HOST           WebDAV host URL
-  --webdav-user USER      WebDAV username (or WEBDAV_USERNAME env var)
-  --webdav-password PASS  WebDAV password (or WEBDAV_PASSWORD env var)
-  --no-skip-processed     Process already-processed files
-  --no-skip-in-metadata   Process files already in metadata.csv
-  --no-sync               Skip git sync
-  --dry-run               Show what would be done without making changes
-  -V, --verbose           Enable verbose output
+song-classifier organize [PATH] [OPTIONS]
+  Move files into Artist/Album/ directories based on stored metadata
+
+  Options:
+    --webdav HOST           WebDAV host URL
+    --webdav-user USER      WebDAV username
+    --webdav-password PASS  WebDAV password
+    --dry-run               Show what would be done without making changes
+    -V, --verbose           Enable verbose output
+
+song-classifier sync SOURCE_PATH --dest DEST_PATH [OPTIONS]
+  Copy audio files from source to destination, skipping files that already exist
+
+  Source options:
+    --webdav HOST              WebDAV host URL for source
+    --webdav-user USER         WebDAV username for source
+    --webdav-password PASS     WebDAV password for source
+
+  Destination options:
+    --dest PATH                Destination directory (required)
+    --dest-webdav HOST         WebDAV host URL for destination
+    --dest-webdav-user USER    WebDAV username for destination
+    --dest-webdav-password PASS  WebDAV password for destination
+
+  Other options:
+    --dry-run               Show what would be done without making changes
+    -V, --verbose           Enable verbose output
+
+song-classifier sync-metadata [PATH] [OPTIONS]
+  Sync stored metadata with file tags (update file tags to match stored, or store file tags if none stored)
+
+  Options:
+    --webdav HOST           WebDAV host URL
+    --webdav-user USER      WebDAV username
+    --webdav-password PASS  WebDAV password
+    --no-sync               Skip git sync
+    --dry-run               Show what would be done without making changes
+    -V, --verbose           Enable verbose output
 
 song-classifier config show
   Show current configuration
