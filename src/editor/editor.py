@@ -30,9 +30,18 @@ from src.data.models import AlbumMetadata, TrackMetadata
 
 # Palette used to colour artist/genre cards deterministically.
 _PALETTE = [
-    "#e74c3c", "#3498db", "#2ecc71", "#f39c12",
-    "#9b59b6", "#1abc9c", "#e67e22", "#e91e63",
-    "#00bcd4", "#8bc34a", "#ff5722", "#607d8b",
+    "#e74c3c",
+    "#3498db",
+    "#2ecc71",
+    "#f39c12",
+    "#9b59b6",
+    "#1abc9c",
+    "#e67e22",
+    "#e91e63",
+    "#00bcd4",
+    "#8bc34a",
+    "#ff5722",
+    "#607d8b",
 ]
 
 
@@ -48,6 +57,7 @@ def _sort_key(track: TrackMetadata, col: str) -> str:
 
 
 # ──────────────────────────── clickable table ──────────────────────────────
+
 
 class ClickableTable(DataTable):
     """DataTable with cursor_type='row' that fires RowClicked on single click or Enter.
@@ -95,6 +105,7 @@ class ClickableTable(DataTable):
 
 
 # ──────────────────────────── cards ────────────────────────────────────────
+
 
 class ArtistCard(Static):
     """Coloured initial + name card for an artist."""
@@ -150,6 +161,7 @@ class GenreCard(Static):
 
 # ──────────────────────────── search result items ──────────────────────────
 
+
 class _TrackResult(Static):
     def __init__(self, track: TrackMetadata) -> None:
         super().__init__(
@@ -182,6 +194,7 @@ class _GenreResult(Static):
 
 # ──────────────────────────── search panel ─────────────────────────────────
 
+
 class SearchResultsPanel(Container):
     """Live search overlay shown beneath the search input."""
 
@@ -198,14 +211,19 @@ class SearchResultsPanel(Container):
         q = query.lower()
 
         matched_tracks = [
-            t for t in tracks
+            t
+            for t in tracks
             if q in (t.track or "").lower()
             or q in (t.artist or "").lower()
             or q in (t.album.name or "").lower()
             or q in (t.genre or "").lower()
         ][:5]
-        matched_artists = sorted({t.artist for t in tracks if q in (t.artist or "").lower()})[:5]
-        matched_genres = sorted({t.genre for t in tracks if q in (t.genre or "").lower()})[:5]
+        matched_artists = sorted(
+            {t.artist for t in tracks if q in (t.artist or "").lower()}
+        )[:5]
+        matched_genres = sorted(
+            {t.genre for t in tracks if q in (t.genre or "").lower()}
+        )[:5]
 
         c_tracks = self.query_one("#sr-tracks", Container)
         c_tracks.remove_children()
@@ -226,6 +244,7 @@ class SearchResultsPanel(Container):
 
 
 # ──────────────────────────── edit modal ───────────────────────────────────
+
 
 class TrackEditModal(ModalScreen[bool]):
     """Centre-screen modal for editing a single track's metadata."""
@@ -284,6 +303,7 @@ class TrackEditModal(ModalScreen[bool]):
 
 # ──────────────────────────── grid pane helpers ─────────────────────────────
 
+
 def _build_grid(cards: list) -> Container:
     """Wrap a list of card widgets in a grid container."""
     return Container(*cards, classes="card-grid")
@@ -298,6 +318,7 @@ def _sort_bar(*labels: str) -> Horizontal:
 
 
 # ──────────────────────────── artists pane ─────────────────────────────────
+
 
 class ArtistsPane(Container):
     def compose(self) -> ComposeResult:
@@ -325,6 +346,7 @@ class ArtistsPane(Container):
 
 # ──────────────────────────── albums pane ──────────────────────────────────
 
+
 class AlbumsPane(Container):
     def compose(self) -> ComposeResult:
         yield _sort_bar("A-Z", "Z-A", "By Artist")
@@ -349,7 +371,9 @@ class AlbumsPane(Container):
 
         grid_container = self.query_one("#albums-grid", Container)
         grid_container.remove_children()
-        grid_container.mount(_build_grid([AlbumCard(name, artist) for name, artist in albums]))
+        grid_container.mount(
+            _build_grid([AlbumCard(name, artist) for name, artist in albums])
+        )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         lbl = str(event.button.label)
@@ -363,6 +387,7 @@ class AlbumsPane(Container):
 
 
 # ──────────────────────────── genres pane ──────────────────────────────────
+
 
 class GenresPane(Container):
     def compose(self) -> ComposeResult:
@@ -390,6 +415,7 @@ class GenresPane(Container):
 
 # ──────────────────────────── tracks helpers ───────────────────────────────
 
+
 def _add_track_columns(table: DataTable) -> None:
     table.add_column("Track", key="track")
     table.add_column("Album", key="album")
@@ -398,9 +424,13 @@ def _add_track_columns(table: DataTable) -> None:
     table.add_column("Date", key="date")
 
 
-def _fill_tracks(table: DataTable, tracks: list[TrackMetadata], sort_col: str, reverse: bool) -> None:
+def _fill_tracks(
+    table: DataTable, tracks: list[TrackMetadata], sort_col: str, reverse: bool
+) -> None:
     table.clear()
-    sorted_tracks = sorted(tracks, key=lambda t: _sort_key(t, sort_col), reverse=reverse)
+    sorted_tracks = sorted(
+        tracks, key=lambda t: _sort_key(t, sort_col), reverse=reverse
+    )
     for t in sorted_tracks:
         table.add_row(
             t.track or "",
@@ -418,6 +448,7 @@ def _track_by_key(key: str) -> TrackMetadata | None:
 
 
 # ──────────────────────────── filtered tracks screen ───────────────────────
+
 
 class FilteredTracksScreen(Screen):
     """Shows tracks filtered by album or genre."""
@@ -483,6 +514,7 @@ class FilteredTracksScreen(Screen):
 
 
 # ──────────────────────────── artist detail screen ─────────────────────────
+
 
 class ArtistDetailScreen(Screen):
     """Shows albums and tracks for a single artist."""
@@ -561,16 +593,21 @@ class ArtistDetailScreen(Screen):
 
 # ──────────────────────────── main screen ──────────────────────────────────
 
+
 class MainScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header()
         with Container(classes="search-container"):
-            yield Input(placeholder="Search tracks, artists, genres...", id="search-input")
+            yield Input(
+                placeholder="Search tracks, artists, genres...", id="search-input"
+            )
             yield SearchResultsPanel(id="search-results")
         with TabbedContent(id="main-tabs"):
             with TabPane("Tracks", id="tab-tracks"):
                 yield ScrollableContainer(
-                    ClickableTable(zebra_stripes=True, cursor_type="row", id="tracks-table"),
+                    ClickableTable(
+                        zebra_stripes=True, cursor_type="row", id="tracks-table"
+                    ),
                 )
             with TabPane("Albums", id="tab-albums"):
                 yield AlbumsPane(id="albums-pane")
@@ -634,6 +671,7 @@ class MainScreen(Screen):
 
 
 # ──────────────────────────── app ──────────────────────────────────────────
+
 
 class Editor(App):
     CSS_PATH = "editor.tcss"
