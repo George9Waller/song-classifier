@@ -4,6 +4,7 @@ from typing import Optional
 
 from src.data.models import YouTubePlaylistConfig
 from src.utils.logging import get_logger
+from src.data.playlists import update_playlist
 
 BASE_URL = "https://www.youtube.com/playlist?list="
 PLAYLIST_ITEMS_ARG = "--playlist-items"
@@ -37,13 +38,16 @@ def get_playlist_info(playlist_id: str) -> Optional[YouTubePlaylistConfig]:
         logger.error(f"Failed to parse playlist info for ID {playlist_id}: {result}")
         return None
 
-    return YouTubePlaylistConfig(
+    config = YouTubePlaylistConfig(
         name=name.group(2).strip(),
         url=url,
         id=playlist_id,
         current_index=0,
         total=int(total.group(1)),
     )
+    update_playlist(config)
+
+    return config
 
 
 def download_playlist_items(playlist_id: str, *, start_index: int) -> bool:
@@ -60,7 +64,7 @@ def download_playlist_items(playlist_id: str, *, start_index: int) -> bool:
             f"{start_index}:",
             "--extract-audio",
             "--audio-format",
-            "opus",
+            "best",
             "--audio-quality",
             "0",
             "--embed-thumbnail",
