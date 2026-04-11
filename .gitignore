@@ -2,6 +2,7 @@
 **/__pycache__/**
 .venv/**
 song_classifier.egg-info/**
+build/**
 
 data/*
 sets/*
