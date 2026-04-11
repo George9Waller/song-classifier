@@ -1,13 +1,40 @@
 """Pytest fixtures for song-classifier tests."""
 
+import json
 import tempfile
 from pathlib import Path
 from typing import Generator
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.data.models import AlbumMetadata, TrackMetadata
+
+
+@pytest.fixture(autouse=True)
+def environment_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Set environment variables for tests."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+
+@pytest.fixture(autouse=True)
+def mock_openai_client(mock_openai_response: dict) -> Generator[AsyncMock, None, None]:
+    """Mock the OpenAI client for all tests."""
+    
+    with patch("src.utils.ai_metadata.AsyncOpenAI") as MockClient:
+        mock_client = AsyncMock()
+        
+        # Configure the mock to return proper response structure
+        mock_completion = MagicMock()
+        mock_choice = MagicMock()
+        mock_message = MagicMock()
+        mock_message.content = json.dumps(mock_openai_response)
+        mock_choice.message = mock_message
+        mock_completion.choices = [mock_choice]
+        
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
+        MockClient.return_value = mock_client
+        yield mock_client
 
 
 @pytest.fixture
@@ -64,23 +91,6 @@ def mock_openai_response() -> dict:
         "genre": "Electronic",
         "date": "2024",
     }
-
-
-@pytest.fixture
-def mock_openai_client(mock_openai_response: dict) -> MagicMock:
-    """Create a mock OpenAI client."""
-    import json
-
-    mock_client = AsyncMock()
-    mock_completion = MagicMock()
-    mock_choice = MagicMock()
-    mock_message = MagicMock()
-    mock_message.content = json.dumps(mock_openai_response)
-    mock_choice.message = mock_message
-    mock_completion.choices = [mock_choice]
-    mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
-
-    return mock_client
 
 
 @pytest.fixture
