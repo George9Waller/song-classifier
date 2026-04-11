@@ -24,6 +24,13 @@ def load_playlist_by_name(name: str) -> YouTubePlaylistConfig | None:
     return None
 
 
+def update_playlist(playlist: YouTubePlaylistConfig) -> None:
+    """Update a single YouTube playlist configuration."""
+    playlists = load_playlists()
+    updated_playlists = [p if p.id != playlist.id else playlist for p in playlists]
+    save_playlists(updated_playlists)
+
+
 def save_playlists(playlists: list[YouTubePlaylistConfig]) -> None:
     """Save YouTube playlist configurations to JSON file."""
     playlists_file = get_or_create_playlists_file_path()
