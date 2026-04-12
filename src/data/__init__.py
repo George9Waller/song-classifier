@@ -88,7 +88,10 @@ def _read_album_metadata(
         return CACHE[file_path]
 
     rows = _read_csv_rows(file_path)
-    albums = [AlbumMetadata.from_csv_row(row) for row in rows]
+    albums = sorted(
+        [AlbumMetadata.from_csv_row(row) for row in rows],
+        key=lambda a: (a.name, a.artist),
+    )
 
     if use_cache:
         CACHE[file_path] = albums
