@@ -111,6 +111,7 @@ def _build_prompt(filename: str, existing: Optional[TrackMetadata]) -> str:
         "Heuristics:\n"
         "- Normalize separators like underscores and dashes to spaces.\n"
         "- If city/country/year present, consider it for date or parentheses in track.\n"
+        "- If there is an existing date in the wrong format, try to parse and convert it to ISO-8601.\n"
         "- If artist is unclear, infer the most probable from the string tokens.\n"
         "- Prefer widely used genre bucket (e.g., 'House', 'Techno', 'Pop').\n"
         "- If truly unknown, use null or a plausible guess rather than placeholders.\n\n"
