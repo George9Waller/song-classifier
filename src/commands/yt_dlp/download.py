@@ -23,10 +23,17 @@ def cmd_yt_dlp_download(args: argparse.Namespace) -> None:
 
     refreshed_playlist = get_playlist_info(playlist.id)
     total_items = refreshed_playlist.total if refreshed_playlist else playlist.total
+    last_index = max(total_items - 1, 0)
 
-    start_index = args.start_index or playlist.current_index
-    if start_index >= (total_items - 1):
+    start_index = (
+        args.start_index if args.start_index is not None else playlist.current_index
+    )
+    if start_index >= last_index:
         logger.info(f"Playlist '{playlist.name}' is already fully downloaded.")
+        playlist.current_index = max(playlist.current_index, last_index)
+        save_playlists(
+            [p if p.name != playlist.name else playlist for p in load_playlists()]
+        )
         return
 
     logger.info(f"Downloading YouTube playlist: {playlist.name} ({playlist.url})")
@@ -36,7 +43,7 @@ def cmd_yt_dlp_download(args: argparse.Namespace) -> None:
 
     if success:
         logger.info(f"Finished downloading playlist '{playlist.name}'.")
-        playlist.current_index = total_items - 1
+        playlist.current_index = last_index
         save_playlists(
             [p if p.name != playlist.name else playlist for p in load_playlists()]
         )
