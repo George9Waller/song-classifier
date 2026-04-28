@@ -2,13 +2,15 @@
 
 import argparse
 import os
-import pathlib
 import posixpath
+import xml.etree.ElementTree as ET
 from enum import Enum
 from typing import Generator, Iterable, Optional
+from urllib.parse import quote as urlquote
+from urllib.parse import unquote, urlsplit, urlunsplit
 
+import requests
 from requests.adapters import HTTPAdapter
-from webdav3 import client, exceptions
 
 from src.constants import EXCLUDED_FILENAMES_FOR_EMPTY_DIRECTORY_DELETION
 from src.utils.logging import get_logger
@@ -128,19 +130,10 @@ class FileTransport:
         raise NotImplementedError
 
 
-class WebdavClient(client.Client):
-    http_adapter = HTTPAdapter(max_retries=3)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.session.mount("http://", self.http_adapter)
-
-
 class WebdavTransport:
     """WebDAV file transport implementation."""
 
     cleanup_local_files = True
-    client_class = None
 
     def __init__(
         self,
@@ -158,7 +151,10 @@ class WebdavTransport:
         if not webdav_host:
             raise ValueError("webdav_host must be provided for WebdavTransport")
 
-        # Get credentials from config/env if not provided
+        parsed_host = urlsplit(webdav_host)
+        if not parsed_host.scheme:
+            parsed_host = urlsplit(f"http://{webdav_host}")
+
         if username is None or password is None:
             from src.utils.config import get_webdav_credentials
 
@@ -166,13 +162,34 @@ class WebdavTransport:
             username = username or config_user
             password = password or config_pass
 
-        self.client_class = WebdavClient(
-            {
-                "webdav_hostname": webdav_host,
-                "webdav_login": username,
-                "webdav_password": password,
-            }
+        # Allow credentials to be embedded in the URL as a fallback.
+        username = username or parsed_host.username
+        password = password or parsed_host.password
+
+        hostname = parsed_host.hostname
+        if not hostname:
+            raise ValueError("webdav_host must include a hostname")
+
+        netloc = hostname
+        if parsed_host.port:
+            netloc = f"{netloc}:{parsed_host.port}"
+
+        self.base_url = urlunsplit(
+            (
+                parsed_host.scheme or "http",
+                netloc,
+                parsed_host.path.rstrip("/"),
+                "",
+                "",
+            )
         )
+        self.auth = (username, password) if username and password else None
+        self.timeout = 30
+
+        self.session = requests.Session()
+        adapter = HTTPAdapter(max_retries=3)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
 
     @staticmethod
     def get_basename_from_path(path: str) -> str:
@@ -182,143 +199,260 @@ class WebdavTransport:
     def get_parent_directory(path: str) -> str:
         return posixpath.dirname(path)
 
+    @staticmethod
+    def _normalize_remote_path(path: str, *, directory: bool = False) -> str:
+        """Normalize a remote path for WebDAV requests."""
+        cleaned = path.strip()
+        if not cleaned:
+            cleaned = "/"
+        elif not cleaned.startswith("/"):
+            cleaned = f"/{cleaned}"
+
+        cleaned = posixpath.normpath(cleaned)
+        if cleaned == ".":
+            cleaned = "/"
+
+        if directory and cleaned != "/" and not cleaned.endswith("/"):
+            cleaned = f"{cleaned}/"
+        return cleaned
+
+    def _build_url(self, remote_path: str) -> str:
+        """Build a fully-qualified URL for a remote WebDAV path."""
+        normalized = self._normalize_remote_path(
+            remote_path, directory=remote_path.endswith("/") or remote_path == "/"
+        )
+        quoted = urlquote(normalized, safe="/")
+        if quoted == "/":
+            return f"{self.base_url}/"
+        return f"{self.base_url.rstrip('/')}{quoted}"
+
+    def _request(
+        self,
+        method: str,
+        remote_path: str,
+        *,
+        headers: Optional[dict[str, str]] = None,
+        data=None,
+        stream: bool = False,
+    ) -> requests.Response:
+        """Execute a WebDAV request and normalize transport failures."""
+        try:
+            return self.session.request(
+                method=method,
+                url=self._build_url(remote_path),
+                auth=self.auth,
+                headers=headers,
+                timeout=self.timeout,
+                data=data,
+                stream=stream,
+                verify=True,
+            )
+        except requests.RequestException as e:
+            raise OSError(f"WebDAV request failed for '{remote_path}': {e}") from e
+
+    @staticmethod
+    def _is_ok_status(status_code: int, expected: set[int]) -> bool:
+        return status_code in expected
+
+    def _require_success(
+        self, response: requests.Response, remote_path: str, *, expected: set[int]
+    ) -> requests.Response:
+        """Raise if the response status is not one of the expected values."""
+        if self._is_ok_status(response.status_code, expected):
+            return response
+        raise OSError(
+            f"WebDAV request failed for '{remote_path}' with status "
+            f"{response.status_code}: {response.text}"
+        )
+
+    def _propfind(self, remote_path: str, *, depth: str) -> requests.Response:
+        """Execute a PROPFIND request."""
+        headers = {"Depth": depth, "Accept": "*/*", "Content-Type": "text/xml"}
+        response = self._request("PROPFIND", remote_path, headers=headers)
+        return self._require_success(response, remote_path, expected={200, 207})
+
+    def _hrefs_from_propfind(
+        self, response: requests.Response
+    ) -> list[tuple[str, bool]]:
+        """Parse a PROPFIND response into hrefs and directory flags."""
+        root = ET.fromstring(response.content)
+        ns = {"D": "DAV:"}
+        items: list[tuple[str, bool]] = []
+
+        for node in root.findall("D:response", ns):
+            href_node = node.find("D:href", ns)
+            if href_node is None or not href_node.text:
+                continue
+
+            prop = node.find("D:propstat/D:prop", ns)
+            if prop is None:
+                prop = node.find("D:prop", ns)
+
+            is_dir = False
+            if prop is not None:
+                is_dir = prop.find("D:resourcetype/D:collection", ns) is not None
+
+            items.append((href_node.text, is_dir))
+
+        return items
+
+    def _remote_path_from_href(self, href: str) -> str:
+        """Convert a WebDAV href to a normalized remote path."""
+        path = urlsplit(href).path
+        if not path:
+            return "/"
+        return self._normalize_remote_path(unquote(path))
+
     def validate_path(self, path: str) -> str:
-        is_dir = self.client_class.is_dir(path)
-        if is_dir:
+        if self.is_dir(path):
             return path
-        else:
-            raise ValueError(f"Path '{path}' is not a directory on WebDAV server")
+        raise ValueError(f"Path '{path}' is not a directory on WebDAV server")
+
+    def is_dir(self, path: str) -> bool:
+        """Check if the given remote path is a directory."""
+        remote_path = self._normalize_remote_path(path, directory=True)
+        try:
+            response = self._propfind(remote_path, depth="0")
+        except OSError:
+            return False
+
+        root = ET.fromstring(response.content)
+        return root.find(".//{DAV:}collection") is not None
 
     def list_files(
         self, path: str, initial_path: Optional[str] = None
     ) -> Generator[str, None, None]:
         """List audio files recursively on WebDAV server."""
         initial_path = initial_path or path
+        normalized_initial = self._normalize_remote_path(initial_path)
+        normalized_path = self._normalize_remote_path(path, directory=True)
 
-        remote_files = self.client_class.list(path, get_info=True)
-        for file in remote_files:
-            if file["isdir"]:
-                # Use posixpath for WebDAV paths (always forward slashes)
+        try:
+            response = self._propfind(normalized_path, depth="1")
+        except OSError:
+            return
+
+        for href, is_dir in self._hrefs_from_propfind(response):
+            child_path = self._remote_path_from_href(href)
+            if self._normalize_remote_path(child_path) == normalized_path.rstrip("/"):
+                continue
+
+            relative_path = child_path
+            if relative_path.startswith(normalized_initial):
+                relative_path = relative_path[len(normalized_initial) :]
+            relative_path = relative_path.lstrip("/")
+
+            if not relative_path:
+                continue
+
+            if is_dir:
                 yield from self.list_files(
-                    path=posixpath.join(path, file["name"]), initial_path=initial_path
+                    path=child_path, initial_path=normalized_initial
                 )
-            else:
-                relative_path = (
-                    file["path"].replace(initial_path, "", count=1).lstrip("/")
-                )
-                if is_audio_file(relative_path):
-                    yield relative_path
+            elif is_audio_file(relative_path):
+                yield relative_path
 
     def load_file(self, path: str, initial_path: str) -> str:
         """Download file from WebDAV to local temp directory."""
         from src.utils.config import get_or_create_temp_dir
 
-        # Create local path if required
         local_path = os.path.join(str(get_or_create_temp_dir()), path)
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
-        # Use posixpath for remote path construction
         remote_path = posixpath.join(initial_path, path)
-        self.client_class.download_sync(remote_path=remote_path, local_path=local_path)
+        response = self._request("GET", remote_path, stream=True)
+        self._require_success(response, remote_path, expected={200})
+
+        with open(local_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=65536):
+                if chunk:
+                    f.write(chunk)
         return local_path
 
     def save_file(
         self, local_path: str, remote_base_path: str, relative_path: str
     ) -> str:
         """Upload file to WebDAV server."""
-
-        # Use posixpath for remote path construction
         remote_path = posixpath.join(remote_base_path, relative_path)
-
-        # Make directory if needed
         remote_dir = posixpath.dirname(remote_path)
         self.mkdir_recursive(remote_dir)
 
-        self.client_class.upload_sync(
-            remote_path=remote_path,
-            local_path=local_path,
-        )
+        with open(local_path, "rb") as f:
+            response = self._request("PUT", remote_path, data=f)
+        self._require_success(response, remote_path, expected={200, 201, 204})
         return remote_path
 
     def mkdir_recursive(self, directory_path: str) -> None:
-        try:
-            directory_exists = self.client_class.is_dir(directory_path)
-        except exceptions.RemoteResourceNotFound:
-            directory_exists = False
+        """Create a directory hierarchy on the WebDAV server."""
+        normalized = self._normalize_remote_path(directory_path, directory=True)
+        if normalized == "/":
+            return True
 
-        if not directory_exists:
-            try:
-                directory_success = self.client_class.mkdir(directory_path)
-            except exceptions.RemoteParentNotFound:
-                path = pathlib.Path(directory_path)
-                path_and_parents = list(reversed(path.parents)) + [path]
-                parent_path_results = [
-                    self.mkdir_recursive(parent.as_posix())
-                    for parent in path_and_parents
-                ]
-                return parent_path_results[-1]
-
-            if not directory_success:
-                logger = get_logger()
-                logger.warning(
-                    f"Failed to create directory '{directory_path}' on WebDAV server."
-                )
-                return False
+        parts = [part for part in normalized.strip("/").split("/") if part]
+        current = ""
+        for part in parts:
+            current = f"{current}/{part}"
+            response = self._request(
+                "MKCOL",
+                current,
+                headers={"Accept": "*/*", "Connection": "Keep-Alive"},
+            )
+            if response.status_code in (200, 201, 204, 405):
+                continue
+            if response.status_code == 409:
+                continue
+            raise OSError(
+                f"Failed to create WebDAV directory '{current}' with status "
+                f"{response.status_code}: {response.text}"
+            )
         return True
 
     def move_file(
         self, original_path: str, new_path: str, initial_path: Optional[str] = None
     ) -> None:
         """Move file to new location on WebDAV server."""
-        # Use posixpath for remote path construction
         original_full_path = posixpath.join(initial_path or "", original_path)
         new_full_path = posixpath.join(initial_path or "", new_path)
 
-        # Ensure destination directory exists
         dest_dir = posixpath.dirname(new_full_path)
         self.mkdir_recursive(dest_dir)
 
-        try:
-            self.client_class.move(
-                remote_path_from=original_full_path, remote_path_to=new_full_path
-            )
-        except exceptions.ResponseErrorCode as e:
-            if "target file exists" in e.message.decode("utf-8").lower():
-                pass  # Ignore if target file already exists
-            else:
-                raise
-
-        try:
-            self.client_class.clean(
-                original_full_path
-            )  # Ensure original file is removed after move
-        except exceptions.ResponseErrorCode as e:
-            if "file not found on disk" in e.message.decode("utf-8").lower():
-                pass  # Ignore if original file is already removed
-            else:
-                logger = get_logger()
-                logger.warning(
-                    f"Failed to clean original file '{original_full_path}' on WebDAV server: {e}"
-                )
+        response = self._request(
+            "MOVE",
+            original_full_path,
+            headers={
+                "Destination": self._build_url(new_full_path),
+                "Overwrite": "T",
+                "Accept": "*/*",
+            },
+        )
+        self._require_success(response, original_full_path, expected={200, 201, 204})
 
     def walk(self, path: str, initial_path: Optional[str] = None):
         """Walk through files in the given path on WebDAV server."""
-        # Use posixpath for remote path construction
         full_path = posixpath.join(initial_path or "", path)
 
-        # Get all nested filed and directories under the given path
         try:
-            items = self.client_class.list(full_path, get_info=True)
-        except exceptions.RemoteResourceNotFound:
+            response = self._propfind(
+                self._normalize_remote_path(full_path, directory=True), depth="1"
+            )
+        except OSError:
             return
 
         dirs = []
         files = []
-        for item in items:
-            if item["isdir"]:
-                dirs.append(item["name"])
+        for href, is_dir in self._hrefs_from_propfind(response):
+            child_path = self._remote_path_from_href(href)
+            if self._normalize_remote_path(child_path) == self._normalize_remote_path(
+                full_path
+            ):
+                continue
+
+            name = posixpath.basename(child_path.rstrip("/"))
+            if is_dir:
+                dirs.append(name)
             else:
-                files.append(item["name"])
+                files.append(name)
 
         yield full_path, dirs, files
 
@@ -331,24 +465,24 @@ class WebdavTransport:
         """Delete directory if it exists (used for cleanup of empty directories)."""
         logger = get_logger()
 
-        full_path = posixpath.join(path)
+        full_path = self._normalize_remote_path(path, directory=True)
         try:
-            if self.client_class.is_dir(full_path):
-                # Delete excluded files if they exist
-                for filename in EXCLUDED_FILENAMES_FOR_EMPTY_DIRECTORY_DELETION:
-                    excluded_file_path = posixpath.join(full_path, filename)
-                    try:
-                        self.client_class.clean(excluded_file_path)
-                    except (
-                        exceptions.RemoteResourceNotFound,
-                        exceptions.ResponseErrorCode,
-                    ):
-                        pass  # File doesn't exist, ignore
+            if not self.is_dir(full_path):
+                return
 
-                self.client_class.clean(full_path)
-        except exceptions.RemoteResourceNotFound:
-            pass  # Directory doesn't exist, ignore
-        except exceptions.WebDavException as e:
+            for filename in EXCLUDED_FILENAMES_FOR_EMPTY_DIRECTORY_DELETION:
+                excluded_file_path = posixpath.join(full_path, filename)
+                try:
+                    response = self._request("DELETE", excluded_file_path)
+                    self._require_success(
+                        response, excluded_file_path, expected={200, 202, 204, 404}
+                    )
+                except OSError:
+                    pass
+
+            response = self._request("DELETE", full_path)
+            self._require_success(response, full_path, expected={200, 202, 204, 404})
+        except OSError as e:
             logger.warning(f"Failed to delete directory '{path}' on WebDAV server: {e}")
 
     def cleanup_local_file_if_needed(self, local_path: str) -> None:
