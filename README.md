@@ -98,7 +98,7 @@ song-classifier process ~/Music/sets
 song-classifier process ~/Music/sets --dry-run
 
 # Process files from a WebDAV server
-song-classifier process /remote/path --webdav http://server/ --webdav-user USER
+song-classifier process /remote/path --webdav http://server/ --webdav-user USER --webdav-password PASS
 ```
 
 ### Commands
@@ -108,7 +108,7 @@ song-classifier process [PATH] [OPTIONS]
   Process audio files — AI-infer metadata from filenames, review in TUI, write tags
 
   Options:
-    --webdav HOST           WebDAV host URL
+    --webdav HOST           WebDAV base URL
     --webdav-user USER      WebDAV username (or WEBDAV_USERNAME env var)
     --webdav-password PASS  WebDAV password (or WEBDAV_PASSWORD env var)
     --no-skip-processed     Process files even if marked as processed
@@ -122,7 +122,7 @@ song-classifier organize [PATH] [OPTIONS]
   Move files into Artist/Album/ directories based on stored metadata
 
   Options:
-    --webdav HOST           WebDAV host URL
+    --webdav HOST           WebDAV base URL
     --webdav-user USER      WebDAV username
     --webdav-password PASS  WebDAV password
     --dry-run               Show what would be done without making changes
@@ -133,13 +133,13 @@ song-classifier sync [SOURCE_PATH] --dest DEST_PATH [OPTIONS]
   Source and destination can each be local or WebDAV independently.
 
   Source options (where to copy from):
-    --webdav HOST              WebDAV host URL for source
+    --webdav HOST              WebDAV base URL for source
     --webdav-user USER         WebDAV username for source
     --webdav-password PASS     WebDAV password for source
 
   Destination options (where to copy to):
     --dest PATH                Destination directory (required)
-    --dest-webdav HOST         WebDAV host URL for destination
+    --dest-webdav HOST         WebDAV base URL for destination
     --dest-webdav-user USER    WebDAV username for destination
     --dest-webdav-password PASS  WebDAV password for destination
 
@@ -152,7 +152,7 @@ song-classifier sync-metadata [PATH] [OPTIONS]
   metadata, or stores file tags if no stored metadata exists
 
   Options:
-    --webdav HOST           WebDAV host URL
+    --webdav HOST           WebDAV base URL
     --webdav-user USER      WebDAV username
     --webdav-password PASS  WebDAV password
     --no-sync               Skip git sync
@@ -183,13 +183,16 @@ song-classifier sync ~/Music/sets --dest /mnt/usb/sets
 song-classifier sync ~/Music/sets --dest /mnt/usb/sets --dry-run
 
 # Copy from WebDAV server to local directory
-song-classifier sync /remote/path --webdav http://server/ --dest ~/Music/sets
+song-classifier sync /remote/path --webdav http://server/ --webdav-user USER --webdav-password PASS --dest ~/Music/sets
 
 # Copy from local directory to WebDAV server
-song-classifier sync ~/Music/sets --dest /remote/path --dest-webdav http://server/ --dest-webdav-user USER
+song-classifier sync ~/Music/sets --dest /remote/path --dest-webdav http://server/ --dest-webdav-user USER --dest-webdav-password PASS
 
 # Copy from one WebDAV server to another
-song-classifier sync /src/path --webdav http://src-server/ --dest /dest/path --dest-webdav http://dest-server/
+song-classifier sync /src/path --webdav http://src-server/ --webdav-user USER --webdav-password PASS --dest /dest/path --dest-webdav http://dest-server/ --dest-webdav-user USER --dest-webdav-password PASS
+
+WebDAV flags should point at the WebDAV base URL, not a file URL. For example, `http://server/` or `http://server/sets/` are valid bases if that is where your DAV root lives.
+Credentials should normally be passed with the dedicated user/password flags. Embedded `user:pass@host` URLs are accepted as a fallback, but are not the preferred form.
 ```
 
 ### Git Sync

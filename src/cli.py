@@ -37,7 +37,7 @@ FILE_TRANSPORT_ARGUMENTS = [
         "--webdav",
         {
             "metavar": "HOST",
-            "help": "WebDAV host URL to use instead of local filesystem",
+            "help": "WebDAV base URL to use instead of local filesystem",
         },
     ),
     (
@@ -168,7 +168,7 @@ def main() -> None:
     sync_files_parser.add_argument(
         "--dest-webdav",
         metavar="HOST",
-        help="WebDAV host URL for the destination",
+        help="WebDAV base URL for the destination",
     )
     sync_files_parser.add_argument(
         "--dest-webdav-user",
@@ -365,10 +365,10 @@ def main() -> None:
             help="Destination directory (used with --sync)",
         )
         legacy_parser.add_argument(
-            "--dest-webdav",
-            metavar="HOST",
-            help="WebDAV host URL for the destination (used with --sync)",
-        )
+        "--dest-webdav",
+        metavar="HOST",
+        help="WebDAV base URL for the destination (used with --sync)",
+    )
         legacy_parser.add_argument(
             "--dest-webdav-user",
             metavar="USER",
