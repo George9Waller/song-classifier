@@ -365,10 +365,10 @@ def main() -> None:
             help="Destination directory (used with --sync)",
         )
         legacy_parser.add_argument(
-        "--dest-webdav",
-        metavar="HOST",
-        help="WebDAV base URL for the destination (used with --sync)",
-    )
+            "--dest-webdav",
+            metavar="HOST",
+            help="WebDAV base URL for the destination (used with --sync)",
+        )
         legacy_parser.add_argument(
             "--dest-webdav-user",
             metavar="USER",

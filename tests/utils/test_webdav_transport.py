@@ -47,7 +47,9 @@ def test_webdav_save_file_uses_mkcol_then_put(
             return FakeResponse(201)
         raise AssertionError(f"Unexpected method: {method}")
 
-    monkeypatch.setattr(transport.session, "request", fake_request.__get__(transport.session))
+    monkeypatch.setattr(
+        transport.session, "request", fake_request.__get__(transport.session)
+    )
 
     result = transport.save_file(
         str(local_file),
@@ -62,7 +64,9 @@ def test_webdav_save_file_uses_mkcol_then_put(
         "MKCOL",
         "PUT",
     ]
-    assert calls[-1]["url"] == "http://10.0.1.14/sets/Carl%20Cox/Essential%20Mix/track.mp3"
+    assert (
+        calls[-1]["url"] == "http://10.0.1.14/sets/Carl%20Cox/Essential%20Mix/track.mp3"
+    )
 
 
 def test_webdav_list_files_parses_propfind_response(
@@ -110,7 +114,9 @@ def test_webdav_list_files_parses_propfind_response(
             return FakeResponse(207, content=subdir_xml)
         raise AssertionError(f"Unexpected url: {url}")
 
-    monkeypatch.setattr(transport.session, "request", fake_request.__get__(transport.session))
+    monkeypatch.setattr(
+        transport.session, "request", fake_request.__get__(transport.session)
+    )
 
     files = list(transport.list_files("sets"))
 
