@@ -507,7 +507,9 @@ def _write_wav(path: str, meta: TrackMetadata) -> None:
     }
 
     audio = WAVE(path)
-    tags = audio.tags or {}
+    if audio.tags is None:
+        audio.add_tags()
+    tags = audio.tags
 
     for key, (frame_cls, value) in tags_to_write.items():
         if value:
