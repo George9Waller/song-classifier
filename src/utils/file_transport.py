@@ -95,7 +95,7 @@ class FileTransport:
         """Check if the given path is a directory."""
         raise NotImplementedError
 
-    def walk(self, path: str) -> Iterable[str, list[str], list[str]]:
+    def walk(self, path: str) -> Iterable[tuple[str, list[str], list[str]]]:
         """Walk through files in the given path."""
         raise NotImplementedError
 
